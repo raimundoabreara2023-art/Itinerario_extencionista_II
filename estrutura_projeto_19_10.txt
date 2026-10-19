@@ -1,0 +1,2328 @@
+==================== ESTRUTURA ====================
+
+[DIR] raizes_memorias_ts
+  .editorconfig
+  .gitignore
+  .nvmrc
+  .prettierignore
+  .prettierrc.json
+  [DIR] apps
+    [DIR] api
+      [DIR] drizzle
+        .gitkeep
+        0000_brief_warhawk.sql
+        [DIR] meta
+          _journal.json
+          0000_snapshot.json
+      drizzle.config.ts
+      package.json
+      [DIR] src
+        app.ts
+        [DIR] config
+          env.ts
+        [DIR] db
+          client.ts
+          schema.ts
+        [DIR] modules
+          [DIR] arvore
+            .gitkeep
+          [DIR] familias
+            .gitkeep
+            familias.repository.ts
+            familias.routes.ts
+            familias.schema.ts
+            familias.service.ts
+          [DIR] fotos
+            .gitkeep
+            fotos.routes.ts
+          [DIR] pessoas
+            pessoas.repository.ts
+            pessoas.routes.ts
+            pessoas.schema.ts
+            pessoas.service.ts
+        server.ts
+        [DIR] shared
+          erros.ts
+      tsconfig.json
+    [DIR] web
+      index.html
+      package.json
+      [DIR] src
+        [DIR] api
+          cliente.ts
+        App.tsx
+        [DIR] componentes
+          .gitkeep
+        [DIR] estilos
+          global.css
+        [DIR] features
+          .gitkeep
+        main.tsx
+        [DIR] paginas
+          Arvore.tsx
+          Familias.tsx
+          Inicio.tsx
+          Pessoas.tsx
+      tsconfig.json
+      vite.config.ts
+  docker-compose.yml
+  [DIR] docs
+    ARQUITETURA.md
+    COMECE-AQUI.md
+    MODELO-DE-DADOS.md
+    ROADMAP.md
+  iniciar_projeto.bat
+  listarEstruturaProjeto.mjs
+  package.json
+  [DIR] packages
+    [DIR] domain
+      package.json
+      [DIR] src
+        [DIR] familias
+          .gitkeep
+          ancestrais.test.ts
+          ancestrais.ts
+        index.ts
+        [DIR] layout
+          .gitkeep
+        [DIR] parentesco
+          .gitkeep
+        [DIR] pessoa
+          nomeCurto.test.ts
+          nomeCurto.ts
+        tipos.ts
+      tsconfig.json
+  pnpm-workspace.yaml
+  README.md
+  tsconfig.base.json
+
+
+
+==================== CODIGO ====================
+
+================================================================================
+ARQUIVO: .prettierrc.json
+================================================================================
+
+{ "semi": true, "singleQuote": true, "trailingComma": "all", "printWidth": 100 }
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\drizzle\0000_brief_warhawk.sql
+================================================================================
+
+CREATE TYPE "public"."papel_filiacao" AS ENUM('PAI', 'MAE');--> statement-breakpoint
+CREATE TABLE "filiacao" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "filiacao_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"filho_id" integer NOT NULL,
+	"genitor_id" integer NOT NULL,
+	"papel" "papel_filiacao" NOT NULL,
+	CONSTRAINT "filiacao_filho_papel" UNIQUE("filho_id","papel"),
+	CONSTRAINT "filiacao_distintos" CHECK ("filiacao"."filho_id" <> "filiacao"."genitor_id")
+);
+--> statement-breakpoint
+CREATE TABLE "pessoa" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "pessoa_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"nome" varchar(150) NOT NULL,
+	"data_nascimento" date,
+	"sexo" varchar(1),
+	"foto" varchar(255),
+	"criado_em" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "uniao" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "uniao_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"pessoa_a_id" integer NOT NULL,
+	"pessoa_b_id" integer NOT NULL,
+	CONSTRAINT "uniao_par" UNIQUE("pessoa_a_id","pessoa_b_id"),
+	CONSTRAINT "uniao_ordem" CHECK ("uniao"."pessoa_a_id" < "uniao"."pessoa_b_id")
+);
+--> statement-breakpoint
+ALTER TABLE "filiacao" ADD CONSTRAINT "filiacao_filho_id_pessoa_id_fk" FOREIGN KEY ("filho_id") REFERENCES "public"."pessoa"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "filiacao" ADD CONSTRAINT "filiacao_genitor_id_pessoa_id_fk" FOREIGN KEY ("genitor_id") REFERENCES "public"."pessoa"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "uniao" ADD CONSTRAINT "uniao_pessoa_a_id_pessoa_id_fk" FOREIGN KEY ("pessoa_a_id") REFERENCES "public"."pessoa"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "uniao" ADD CONSTRAINT "uniao_pessoa_b_id_pessoa_id_fk" FOREIGN KEY ("pessoa_b_id") REFERENCES "public"."pessoa"("id") ON DELETE cascade ON UPDATE no action;
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\drizzle\meta\_journal.json
+================================================================================
+
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791998656459,
+      "tag": "0000_brief_warhawk",
+      "breakpoints": true
+    }
+  ]
+}
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\drizzle\meta\0000_snapshot.json
+================================================================================
+
+{
+  "id": "f0ba1629-6236-47d6-acf4-429a02da6615",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.filiacao": {
+      "name": "filiacao",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "filiacao_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "filho_id": {
+          "name": "filho_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "genitor_id": {
+          "name": "genitor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "papel": {
+          "name": "papel",
+          "type": "papel_filiacao",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "filiacao_filho_id_pessoa_id_fk": {
+          "name": "filiacao_filho_id_pessoa_id_fk",
+          "tableFrom": "filiacao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "filho_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "filiacao_genitor_id_pessoa_id_fk": {
+          "name": "filiacao_genitor_id_pessoa_id_fk",
+          "tableFrom": "filiacao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "genitor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "filiacao_filho_papel": {
+          "name": "filiacao_filho_papel",
+          "nullsNotDistinct": false,
+          "columns": [
+            "filho_id",
+            "papel"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "filiacao_distintos": {
+          "name": "filiacao_distintos",
+          "value": "\"filiacao\".\"filho_id\" <> \"filiacao\".\"genitor_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.pessoa": {
+      "name": "pessoa",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "pessoa_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "nome": {
+          "name": "nome",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_nascimento": {
+          "name": "data_nascimento",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sexo": {
+          "name": "sexo",
+          "type": "varchar(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "foto": {
+          "name": "foto",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.uniao": {
+      "name": "uniao",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "uniao_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "pessoa_a_id": {
+          "name": "pessoa_a_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pessoa_b_id": {
+          "name": "pessoa_b_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "uniao_pessoa_a_id_pessoa_id_fk": {
+          "name": "uniao_pessoa_a_id_pessoa_id_fk",
+          "tableFrom": "uniao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_a_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "uniao_pessoa_b_id_pessoa_id_fk": {
+          "name": "uniao_pessoa_b_id_pessoa_id_fk",
+          "tableFrom": "uniao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_b_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uniao_par": {
+          "name": "uniao_par",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pessoa_a_id",
+            "pessoa_b_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "uniao_ordem": {
+          "name": "uniao_ordem",
+          "value": "\"uniao\".\"pessoa_a_id\" < \"uniao\".\"pessoa_b_id\""
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.papel_filiacao": {
+      "name": "papel_filiacao",
+      "schema": "public",
+      "values": [
+        "PAI",
+        "MAE"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\drizzle.config.ts
+================================================================================
+
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  dialect: 'postgresql',
+  schema: './src/db/schema.ts',
+  out: './drizzle',
+  dbCredentials: { url: process.env.DATABASE_URL ?? '' },
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\package.json
+================================================================================
+
+{
+  "name": "@raizes/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/server.ts",
+    "start": "tsx --env-file=.env src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.0.1",
+    "@fastify/static": "^8.0.3",
+    "@raizes/domain": "workspace:*",
+    "drizzle-orm": "^0.38.0",
+    "fastify": "^5.1.0",
+    "pg": "^8.13.1",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.30.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\app.ts
+================================================================================
+
+import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import Fastify from 'fastify';
+import { sql } from 'drizzle-orm';
+import { ZodError } from 'zod';
+import type { Db } from './db/client.js';
+import { ErroNegocio } from './shared/erros.js';
+import { fotosRoutes } from './modules/fotos/fotos.routes.js';
+import { familiasRoutes } from './modules/familias/familias.routes.js';
+import { pessoasRoutes } from './modules/pessoas/pessoas.routes.js';
+
+export async function createApp(opts: { db: Db; webOrigin: string; uploadDir: string }) {
+  const app = Fastify({ logger: true });
+  await app.register(cors, {
+    origin: opts.webOrigin,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
+  });
+
+  const uploadDir = path.resolve(opts.uploadDir);
+  mkdirSync(path.join(uploadDir, 'fotos'), { recursive: true });
+  await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
+  await app.register(fastifyStatic, { root: uploadDir, prefix: '/api/uploads/' });
+
+  app.setErrorHandler((erro, _req, reply) => {
+    if (erro instanceof ZodError) {
+      return reply.status(400).send({ erro: 'Dados inválidos', detalhes: erro.flatten() });
+    }
+    if (erro instanceof ErroNegocio) {
+      return reply.status(erro.status).send({ erro: erro.message });
+    }
+    app.log.error(erro);
+    return reply.status(500).send({ erro: 'Erro interno' });
+  });
+
+  app.get('/api/health', async () => ({ ok: true }));
+  app.get('/api/health/db', async () => {
+    await opts.db.execute(sql`select 1`);
+    return { ok: true, db: 'conectado' };
+  });
+
+  await app.register(pessoasRoutes(opts.db), { prefix: '/api' });
+  await app.register(familiasRoutes(opts.db), { prefix: '/api' });
+  await app.register(fotosRoutes(opts.db, uploadDir), { prefix: '/api' });
+  return app;
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\config\env.ts
+================================================================================
+
+import { z } from 'zod';
+
+const schema = z.object({
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatória'),
+  PORT: z.coerce.number().int().default(3333),
+  WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  UPLOAD_DIR: z.string().default('./uploads'),
+});
+
+export const env = schema.parse(process.env);
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\db\client.ts
+================================================================================
+
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
+import * as schema from './schema.js';
+
+export function criarDb(databaseUrl: string) {
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  return { db: drizzle(pool, { schema }), pool };
+}
+
+export type Db = ReturnType<typeof criarDb>['db'];
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\db\schema.ts
+================================================================================
+
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  date,
+  integer,
+  pgEnum,
+  pgTable,
+  timestamp,
+  unique,
+  varchar,
+} from 'drizzle-orm/pg-core';
+
+export const papelFiliacao = pgEnum('papel_filiacao', ['PAI', 'MAE']);
+
+export const pessoa = pgTable('pessoa', {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  nome: varchar({ length: 150 }).notNull(),
+  dataNascimento: date('data_nascimento'),
+  sexo: varchar({ length: 1 }),
+  foto: varchar({ length: 255 }),
+  criadoEm: timestamp('criado_em').notNull().defaultNow(),
+});
+
+export const uniao = pgTable(
+  'uniao',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    pessoaAId: integer('pessoa_a_id').notNull().references(() => pessoa.id, { onDelete: 'cascade' }),
+    pessoaBId: integer('pessoa_b_id').notNull().references(() => pessoa.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    check('uniao_ordem', sql`${t.pessoaAId} < ${t.pessoaBId}`),
+    unique('uniao_par').on(t.pessoaAId, t.pessoaBId),
+  ],
+);
+
+export const filiacao = pgTable(
+  'filiacao',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    filhoId: integer('filho_id').notNull().references(() => pessoa.id, { onDelete: 'cascade' }),
+    genitorId: integer('genitor_id').notNull().references(() => pessoa.id, { onDelete: 'cascade' }),
+    papel: papelFiliacao().notNull(),
+  },
+  (t) => [
+    unique('filiacao_filho_papel').on(t.filhoId, t.papel),
+    check('filiacao_distintos', sql`${t.filhoId} <> ${t.genitorId}`),
+  ],
+);
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\familias\familias.repository.ts
+================================================================================
+
+import { and, eq } from 'drizzle-orm';
+import type { Db } from '../../db/client.js';
+import { filiacao, uniao } from '../../db/schema.js';
+
+export function familiasRepository(db: Db) {
+  return {
+    listarUnioes: () => db.select().from(uniao),
+    async buscarUniao(a: number, b: number) {
+      const [u] = await db
+        .select()
+        .from(uniao)
+        .where(and(eq(uniao.pessoaAId, a), eq(uniao.pessoaBId, b)));
+      return u;
+    },
+    async criarUniao(a: number, b: number) {
+      const [u] = await db.insert(uniao).values({ pessoaAId: a, pessoaBId: b }).returning();
+      return u!;
+    },
+    async excluirUniao(id: number) {
+      const r = await db.delete(uniao).where(eq(uniao.id, id)).returning({ id: uniao.id });
+      return r.length > 0;
+    },
+
+    listarFiliacoes: () => db.select().from(filiacao),
+    async buscarFiliacaoDoFilho(filhoId: number, papel: 'PAI' | 'MAE') {
+      const [f] = await db
+        .select()
+        .from(filiacao)
+        .where(and(eq(filiacao.filhoId, filhoId), eq(filiacao.papel, papel)));
+      return f;
+    },
+    async criarFiliacao(filhoId: number, genitorId: number, papel: 'PAI' | 'MAE') {
+      const [f] = await db.insert(filiacao).values({ filhoId, genitorId, papel }).returning();
+      return f!;
+    },
+    async excluirFiliacao(id: number) {
+      const r = await db.delete(filiacao).where(eq(filiacao.id, id)).returning({ id: filiacao.id });
+      return r.length > 0;
+    },
+  };
+}
+export type FamiliasRepository = ReturnType<typeof familiasRepository>;
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\familias\familias.routes.ts
+================================================================================
+
+import type { FastifyInstance } from 'fastify';
+import type { Db } from '../../db/client.js';
+import { pessoasRepository } from '../pessoas/pessoas.repository.js';
+import { criarFiliacaoSchema, criarUniaoSchema, idParamSchema } from './familias.schema.js';
+import { familiasRepository } from './familias.repository.js';
+import { familiasService } from './familias.service.js';
+
+export function familiasRoutes(db: Db) {
+  const service = familiasService(familiasRepository(db), pessoasRepository(db));
+  return async (app: FastifyInstance) => {
+    app.get('/unioes', async () => service.listarUnioes());
+    app.post('/unioes', async (req, reply) =>
+      reply.status(201).send(await service.criarUniao(criarUniaoSchema.parse(req.body))),
+    );
+    app.delete('/unioes/:id', async (req, reply) => {
+      await service.excluirUniao(idParamSchema.parse(req.params).id);
+      return reply.status(204).send();
+    });
+
+    app.get('/filiacoes', async () => service.listarFiliacoes());
+    app.post('/filiacoes', async (req, reply) =>
+      reply.status(201).send(await service.criarFiliacao(criarFiliacaoSchema.parse(req.body))),
+    );
+    app.delete('/filiacoes/:id', async (req, reply) => {
+      await service.excluirFiliacao(idParamSchema.parse(req.params).id);
+      return reply.status(204).send();
+    });
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\familias\familias.schema.ts
+================================================================================
+
+import { z } from 'zod';
+
+const id = z.number().int().positive();
+
+export const criarUniaoSchema = z.object({ pessoaAId: id, pessoaBId: id });
+export const criarFiliacaoSchema = z.object({
+  filhoId: id,
+  genitorId: id,
+  papel: z.enum(['PAI', 'MAE']),
+});
+export const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+export type CriarUniao = z.infer<typeof criarUniaoSchema>;
+export type CriarFiliacao = z.infer<typeof criarFiliacaoSchema>;
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\familias\familias.service.ts
+================================================================================
+
+import { ehAncestral } from '@raizes/domain';
+import { ErroNegocio, naoEncontrado } from '../../shared/erros.js';
+import type { PessoasRepository } from '../pessoas/pessoas.repository.js';
+import type { FamiliasRepository } from './familias.repository.js';
+import type { CriarFiliacao, CriarUniao } from './familias.schema.js';
+
+export function familiasService(repo: FamiliasRepository, pessoas: PessoasRepository) {
+  const exigirPessoa = async (id: number) => {
+    if (!(await pessoas.buscar(id))) throw naoEncontrado(`Pessoa ${id}`);
+  };
+
+  return {
+    listarUnioes: () => repo.listarUnioes(),
+    listarFiliacoes: () => repo.listarFiliacoes(),
+
+    async criarUniao({ pessoaAId, pessoaBId }: CriarUniao) {
+      if (pessoaAId === pessoaBId) throw new ErroNegocio('Uma pessoa não pode se unir a ela mesma');
+      await exigirPessoa(pessoaAId);
+      await exigirPessoa(pessoaBId);
+      // sempre grava com a < b, para o casal existir uma vez só
+      const a = Math.min(pessoaAId, pessoaBId);
+      const b = Math.max(pessoaAId, pessoaBId);
+      if (await repo.buscarUniao(a, b)) throw new ErroNegocio('Esse casal já está cadastrado', 409);
+      return repo.criarUniao(a, b);
+    },
+    async excluirUniao(id: number) {
+      if (!(await repo.excluirUniao(id))) throw naoEncontrado('União');
+    },
+
+    async criarFiliacao({ filhoId, genitorId, papel }: CriarFiliacao) {
+      if (filhoId === genitorId) throw new ErroNegocio('Ninguém pode ser pai/mãe de si mesmo');
+      await exigirPessoa(filhoId);
+      await exigirPessoa(genitorId);
+      if (await repo.buscarFiliacaoDoFilho(filhoId, papel)) {
+        throw new ErroNegocio(`Essa pessoa já tem ${papel === 'PAI' ? 'um pai' : 'uma mãe'} cadastrado(a)`, 409);
+      }
+      const todas = await repo.listarFiliacoes();
+      // o "filho" não pode ser ancestral do genitor (evita ciclos na árvore)
+      if (ehAncestral(todas, filhoId, genitorId)) {
+        throw new ErroNegocio('Isso criaria um ciclo: o filho já é ancestral dessa pessoa');
+      }
+      return repo.criarFiliacao(filhoId, genitorId, papel);
+    },
+    async excluirFiliacao(id: number) {
+      if (!(await repo.excluirFiliacao(id))) throw naoEncontrado('Filiação');
+    },
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\fotos\fotos.routes.ts
+================================================================================
+
+import { createWriteStream } from 'node:fs';
+import { mkdir, unlink } from 'node:fs/promises';
+import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import type { FastifyInstance } from 'fastify';
+import type { Db } from '../../db/client.js';
+import { ErroNegocio, naoEncontrado } from '../../shared/erros.js';
+import { pessoasRepository } from '../pessoas/pessoas.repository.js';
+import { idParamSchema } from '../pessoas/pessoas.schema.js';
+
+const EXTENSOES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+export function fotosRoutes(db: Db, uploadDir: string) {
+  const pessoas = pessoasRepository(db);
+  const dirFotos = path.join(uploadDir, 'fotos');
+
+  const apagarArquivo = (relativo: string | null) =>
+    relativo ? unlink(path.join(uploadDir, relativo)).catch(() => undefined) : Promise.resolve();
+
+  return async (app: FastifyInstance) => {
+    app.post('/pessoas/:id/foto', async (req) => {
+      const { id } = idParamSchema.parse(req.params);
+      const pessoa = await pessoas.buscar(id);
+      if (!pessoa) throw naoEncontrado('Pessoa');
+
+      const arquivo = await req.file();
+      if (!arquivo) throw new ErroNegocio('Envie uma imagem');
+      const ext = EXTENSOES[arquivo.mimetype];
+      if (!ext) {
+        arquivo.file.resume();
+        throw new ErroNegocio('Formato inválido: use JPG, PNG ou WebP');
+      }
+
+      await mkdir(dirFotos, { recursive: true });
+      const nome = `${id}-${Date.now()}${ext}`;
+      const destino = path.join(dirFotos, nome);
+      await pipeline(arquivo.file, createWriteStream(destino));
+      if (arquivo.file.truncated) {
+        await unlink(destino).catch(() => undefined);
+        throw new ErroNegocio('Imagem maior que 5 MB');
+      }
+
+      await apagarArquivo(pessoa.foto);
+      return pessoas.definirFoto(id, `fotos/${nome}`);
+    });
+
+    app.delete('/pessoas/:id/foto', async (req) => {
+      const { id } = idParamSchema.parse(req.params);
+      const pessoa = await pessoas.buscar(id);
+      if (!pessoa) throw naoEncontrado('Pessoa');
+      await apagarArquivo(pessoa.foto);
+      return pessoas.definirFoto(id, null);
+    });
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\pessoas\pessoas.repository.ts
+================================================================================
+
+import { asc, eq } from 'drizzle-orm';
+import type { Db } from '../../db/client.js';
+import { pessoa } from '../../db/schema.js';
+import type { CriarPessoa } from './pessoas.schema.js';
+
+const valores = (d: CriarPessoa) => ({
+  nome: d.nome,
+  dataNascimento: d.dataNascimento ?? null,
+  sexo: d.sexo ?? null,
+});
+
+export function pessoasRepository(db: Db) {
+  return {
+    listar: () => db.select().from(pessoa).orderBy(asc(pessoa.nome)),
+    async buscar(id: number) {
+      const [p] = await db.select().from(pessoa).where(eq(pessoa.id, id));
+      return p;
+    },
+    async criar(dados: CriarPessoa) {
+      const [p] = await db.insert(pessoa).values(valores(dados)).returning();
+      return p!;
+    },
+    async atualizar(id: number, dados: CriarPessoa) {
+      const [p] = await db.update(pessoa).set(valores(dados)).where(eq(pessoa.id, id)).returning();
+      return p;
+    },
+    async definirFoto(id: number, caminho: string | null) {
+      const [p] = await db.update(pessoa).set({ foto: caminho }).where(eq(pessoa.id, id)).returning();
+      return p;
+    },
+    async excluir(id: number) {
+      const r = await db.delete(pessoa).where(eq(pessoa.id, id)).returning({ id: pessoa.id });
+      return r.length > 0;
+    },
+  };
+}
+export type PessoasRepository = ReturnType<typeof pessoasRepository>;
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\pessoas\pessoas.routes.ts
+================================================================================
+
+import type { FastifyInstance } from 'fastify';
+import type { Db } from '../../db/client.js';
+import { atualizarPessoaSchema, criarPessoaSchema, idParamSchema } from './pessoas.schema.js';
+import { pessoasRepository } from './pessoas.repository.js';
+import { pessoasService } from './pessoas.service.js';
+
+export function pessoasRoutes(db: Db) {
+  const service = pessoasService(pessoasRepository(db));
+  return async (app: FastifyInstance) => {
+    app.get('/pessoas', async () => service.listar());
+    app.get('/pessoas/:id', async (req) => {
+      const { id } = idParamSchema.parse(req.params);
+      return service.obter(id);
+    });
+    app.post('/pessoas', async (req, reply) => {
+      const dados = criarPessoaSchema.parse(req.body);
+      return reply.status(201).send(await service.criar(dados));
+    });
+    app.put('/pessoas/:id', async (req) => {
+      const { id } = idParamSchema.parse(req.params);
+      return service.atualizar(id, atualizarPessoaSchema.parse(req.body));
+    });
+    app.delete('/pessoas/:id', async (req, reply) => {
+      const { id } = idParamSchema.parse(req.params);
+      await service.excluir(id);
+      return reply.status(204).send();
+    });
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\pessoas\pessoas.schema.ts
+================================================================================
+
+import { z } from 'zod';
+
+export const criarPessoaSchema = z.object({
+  nome: z.string().trim().min(1, 'Nome é obrigatório').max(150),
+  dataNascimento: z.string().date().nullish(),
+  sexo: z.enum(['M', 'F']).nullish(),
+});
+
+// Atualização = substituição completa dos campos (mesmo formato do cadastro).
+export const atualizarPessoaSchema = criarPessoaSchema;
+
+export const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+export type CriarPessoa = z.infer<typeof criarPessoaSchema>;
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\pessoas\pessoas.service.ts
+================================================================================
+
+import { naoEncontrado } from '../../shared/erros.js';
+import type { PessoasRepository } from './pessoas.repository.js';
+import type { CriarPessoa } from './pessoas.schema.js';
+
+export function pessoasService(repo: PessoasRepository) {
+  return {
+    listar: () => repo.listar(),
+    async obter(id: number) {
+      const p = await repo.buscar(id);
+      if (!p) throw naoEncontrado('Pessoa');
+      return p;
+    },
+    criar: (dados: CriarPessoa) => repo.criar(dados),
+    async atualizar(id: number, dados: CriarPessoa) {
+      const p = await repo.atualizar(id, dados);
+      if (!p) throw naoEncontrado('Pessoa');
+      return p;
+    },
+    async excluir(id: number) {
+      if (!(await repo.excluir(id))) throw naoEncontrado('Pessoa');
+    },
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\server.ts
+================================================================================
+
+import { createApp } from './app.js';
+import { env } from './config/env.js';
+import { criarDb } from './db/client.js';
+
+const { db } = criarDb(env.DATABASE_URL);
+const app = await createApp({ db, webOrigin: env.WEB_ORIGIN, uploadDir: env.UPLOAD_DIR });
+await app.listen({ port: env.PORT, host: '0.0.0.0' });
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\shared\erros.ts
+================================================================================
+
+export class ErroNegocio extends Error {
+  constructor(
+    mensagem: string,
+    public readonly status: 404 | 409 | 422 = 422,
+  ) {
+    super(mensagem);
+  }
+}
+
+export const naoEncontrado = (o: string) => new ErroNegocio(`${o} não encontrado(a)`, 404);
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\tsconfig.json
+================================================================================
+
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["src", "drizzle.config.ts"]
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\package.json
+================================================================================
+
+{
+  "name": "@raizes/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"sem testes no web ainda\""
+  },
+  "dependencies": {
+    "@raizes/domain": "workspace:*",
+    "@tanstack/react-query": "^5.62.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\api\cliente.ts
+================================================================================
+
+export async function api<T>(caminho: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(`/api${caminho}`, {
+    ...init,
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+  });
+  if (!resp.ok) {
+    const corpo = (await resp.json().catch(() => null)) as { erro?: string } | null;
+    throw new Error(corpo?.erro ?? `Erro ${resp.status}`);
+  }
+  if (resp.status === 204) return undefined as T;
+  if (resp.status === 204) return undefined as T;
+  return resp.json() as Promise<T>;
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\App.tsx
+================================================================================
+
+import { NavLink, Route, Routes } from 'react-router-dom';
+import { Arvore } from './paginas/Arvore';
+import { Familias } from './paginas/Familias';
+import { Inicio } from './paginas/Inicio';
+import { Pessoas } from './paginas/Pessoas';
+
+export function App() {
+  return (
+    <>
+      <header className="topo">
+        <h1>Raízes &amp; Memórias</h1>
+        <nav>
+          <NavLink to="/">Início</NavLink>
+          <NavLink to="/arvore">Árvore</NavLink>
+          <NavLink to="/pessoas">Pessoas</NavLink>
+          <NavLink to="/familias">Famílias</NavLink>
+        </nav>
+      </header>
+      <main className="conteudo">
+        <Routes>
+          <Route path="/" element={<Inicio />} />
+          <Route path="/arvore" element={<Arvore />} />
+          <Route path="/pessoas" element={<Pessoas />} />
+          <Route path="/familias" element={<Familias />} />
+        </Routes>
+      </main>
+    </>
+  );
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\estilos\global.css
+================================================================================
+
+:root {
+  --pergaminho: #f3e9d2;
+  --pergaminho-escuro: #e3d3ad;
+  --marrom: #5a3e22;
+  --marrom-claro: #8b6b43;
+  --destaque: #a2542a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--pergaminho);
+  color: var(--marrom);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--pergaminho-escuro);
+  border-bottom: 2px solid var(--marrom-claro);
+}
+.topo h1 { margin: 0; font-size: 1.4rem; }
+.topo nav { display: flex; gap: 16px; }
+.topo a { color: var(--marrom); text-decoration: none; padding: 4px 8px; }
+.topo a.active { color: var(--destaque); border-bottom: 2px solid var(--destaque); }
+.conteudo { padding: 24px; }
+
+.form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 24px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
+.form input, .form select {
+  padding: 6px 8px; border: 1px solid var(--marrom-claro); border-radius: 4px;
+  background: #fffaf0; color: var(--marrom); font: inherit;
+}
+.form input[type='text'], .form input:not([type]) { min-width: 280px; }
+button {
+  padding: 6px 14px; border: 1px solid var(--marrom); border-radius: 4px;
+  background: var(--marrom); color: var(--pergaminho); font: inherit; cursor: pointer;
+}
+button.secundario { background: transparent; color: var(--marrom); }
+button.perigo { background: var(--destaque); border-color: var(--destaque); }
+button:disabled { opacity: .6; cursor: default; }
+.acoes { display: flex; gap: 8px; }
+.erro { color: #a02020; width: 100%; margin: 0; }
+.tabela { width: 100%; border-collapse: collapse; background: #fffaf0; }
+.tabela th, .tabela td { vertical-align: middle; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--pergaminho-escuro); }
+.tabela th { background: var(--pergaminho-escuro); }
+
+/* formulários e tabelas */
+.form-pessoa { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.form-pessoa input, .form-pessoa select {
+  padding: 8px; border: 1px solid var(--marrom-claro); border-radius: 4px;
+  background: #fffaf0; color: var(--marrom); font: inherit;
+}
+.form-pessoa input:first-child { flex: 1; min-width: 240px; }
+button {
+  padding: 8px 14px; border: 0; border-radius: 4px; cursor: pointer;
+  background: var(--destaque); color: #fff; font: inherit;
+}
+button:disabled { opacity: 0.6; cursor: wait; }
+button.secundario { background: var(--marrom-claro); }
+button.perigo { background: #8a2b2b; }
+.tabela { width: 100%; border-collapse: collapse; background: #fffaf0; }
+.tabela th, .tabela td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--pergaminho-escuro); }
+.tabela .acoes { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; align-items: center; }
+.erro { color: #8a2b2b; }
+
+.form-pessoa .entre { align-self: center; }
+
+/* fotos */
+.foto-mini {
+  width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--marrom-claro); display: inline-block;
+}
+.foto-mini.vazia {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--pergaminho-escuro); font-weight: bold;
+}
+label.botao {
+  padding: 8px 14px; border-radius: 4px; cursor: pointer; color: #fff; display: inline-block;
+}
+label.botao.secundario { background: var(--marrom-claro); }
+
+button.secundario, label.botao.secundario { color: #fff; }
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\main.tsx
+================================================================================
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import { App } from './App';
+import './estilos/global.css';
+
+const queryClient = new QueryClient();
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </StrictMode>,
+);
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\paginas\Arvore.tsx
+================================================================================
+
+export function Arvore() {
+  return <p>Tela de Arvore — a implementar (veja docs/ROADMAP.md).</p>;
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\paginas\Familias.tsx
+================================================================================
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
+import { api } from '../api/cliente';
+
+type PessoaDto = { id: number; nome: string };
+type UniaoDto = { id: number; pessoaAId: number; pessoaBId: number };
+type FiliacaoDto = { id: number; filhoId: number; genitorId: number; papel: 'PAI' | 'MAE' };
+
+function SelectPessoa(props: {
+  valor: string;
+  onChange: (v: string) => void;
+  pessoas: PessoaDto[];
+  rotulo: string;
+}) {
+  return (
+    <select value={props.valor} onChange={(e) => props.onChange(e.target.value)} required>
+      <option value="">{props.rotulo}</option>
+      {props.pessoas.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.nome}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+export function Familias() {
+  const qc = useQueryClient();
+  const pessoas = useQuery({ queryKey: ['pessoas'], queryFn: () => api<PessoaDto[]>('/pessoas') });
+  const unioes = useQuery({ queryKey: ['unioes'], queryFn: () => api<UniaoDto[]>('/unioes') });
+  const filiacoes = useQuery({
+    queryKey: ['filiacoes'],
+    queryFn: () => api<FiliacaoDto[]>('/filiacoes'),
+  });
+
+  const nomes = new Map((pessoas.data ?? []).map((p) => [p.id, p.nome]));
+  const nome = (id: number) => nomes.get(id) ?? `#${id}`;
+
+  const [pessoaA, setPessoaA] = useState('');
+  const [pessoaB, setPessoaB] = useState('');
+  const [filho, setFilho] = useState('');
+  const [genitor, setGenitor] = useState('');
+  const [papel, setPapel] = useState<'PAI' | 'MAE'>('PAI');
+
+  const criarUniao = useMutation({
+    mutationFn: () =>
+      api<UniaoDto>('/unioes', {
+        method: 'POST',
+        body: JSON.stringify({ pessoaAId: Number(pessoaA), pessoaBId: Number(pessoaB) }),
+      }),
+    onSuccess: () => {
+      setPessoaA('');
+      setPessoaB('');
+      void qc.invalidateQueries({ queryKey: ['unioes'] });
+    },
+  });
+  const excluirUniao = useMutation({
+    mutationFn: (id: number) => api<void>(`/unioes/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['unioes'] }),
+  });
+
+  const criarFiliacao = useMutation({
+    mutationFn: () =>
+      api<FiliacaoDto>('/filiacoes', {
+        method: 'POST',
+        body: JSON.stringify({ filhoId: Number(filho), genitorId: Number(genitor), papel }),
+      }),
+    onSuccess: () => {
+      setFilho('');
+      setGenitor('');
+      void qc.invalidateQueries({ queryKey: ['filiacoes'] });
+    },
+  });
+  const excluirFiliacao = useMutation({
+    mutationFn: (id: number) => api<void>(`/filiacoes/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['filiacoes'] }),
+  });
+
+  const lista = pessoas.data ?? [];
+  const aoEnviar = (acao: () => void) => (e: FormEvent) => {
+    e.preventDefault();
+    acao();
+  };
+
+  return (
+    <section>
+      <h2>Casais</h2>
+      <form className="form-pessoa" onSubmit={aoEnviar(() => criarUniao.mutate())}>
+        <SelectPessoa valor={pessoaA} onChange={setPessoaA} pessoas={lista} rotulo="Pessoa 1" />
+        <span className="entre">💞</span>
+        <SelectPessoa valor={pessoaB} onChange={setPessoaB} pessoas={lista} rotulo="Pessoa 2" />
+        <button type="submit" disabled={criarUniao.isPending}>
+          Unir
+        </button>
+      </form>
+      {criarUniao.error && <p className="erro">{criarUniao.error.message}</p>}
+      {excluirUniao.error && <p className="erro">{excluirUniao.error.message}</p>}
+      <table className="tabela">
+        <tbody>
+          {(unioes.data ?? []).map((u) => (
+            <tr key={u.id}>
+              <td>
+                {nome(u.pessoaAId)} 💞 {nome(u.pessoaBId)}
+              </td>
+              <td className="acoes">
+                <button
+                  type="button"
+                  className="perigo"
+                  onClick={() => confirm('Remover este casal?') && excluirUniao.mutate(u.id)}
+                >
+                  Remover
+                </button>
+              </td>
+            </tr>
+          ))}
+          {unioes.data?.length === 0 && (
+            <tr>
+              <td>Nenhum casal cadastrado.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      <h2 style={{ marginTop: 32 }}>Pais e filhos</h2>
+      <form className="form-pessoa" onSubmit={aoEnviar(() => criarFiliacao.mutate())}>
+        <SelectPessoa valor={genitor} onChange={setGenitor} pessoas={lista} rotulo="Pai/Mãe" />
+        <select value={papel} onChange={(e) => setPapel(e.target.value as 'PAI' | 'MAE')}>
+          <option value="PAI">é o PAI de</option>
+          <option value="MAE">é a MÃE de</option>
+        </select>
+        <SelectPessoa valor={filho} onChange={setFilho} pessoas={lista} rotulo="Filho(a)" />
+        <button type="submit" disabled={criarFiliacao.isPending}>
+          Vincular
+        </button>
+      </form>
+      {criarFiliacao.error && <p className="erro">{criarFiliacao.error.message}</p>}
+      {excluirFiliacao.error && <p className="erro">{excluirFiliacao.error.message}</p>}
+      <table className="tabela">
+        <tbody>
+          {(filiacoes.data ?? []).map((f) => (
+            <tr key={f.id}>
+              <td>
+                {nome(f.genitorId)} — {f.papel === 'PAI' ? 'pai' : 'mãe'} de — {nome(f.filhoId)}
+              </td>
+              <td className="acoes">
+                <button
+                  type="button"
+                  className="perigo"
+                  onClick={() => confirm('Remover este vínculo?') && excluirFiliacao.mutate(f.id)}
+                >
+                  Remover
+                </button>
+              </td>
+            </tr>
+          ))}
+          {filiacoes.data?.length === 0 && (
+            <tr>
+              <td>Nenhum vínculo cadastrado.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\paginas\Inicio.tsx
+================================================================================
+
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/cliente';
+
+export function Inicio() {
+  const { data, error, isPending } = useQuery({
+    queryKey: ['health-db'],
+    queryFn: () => api<{ ok: boolean; db: string }>('/health/db'),
+    retry: false,
+  });
+  return (
+    <section>
+      <h2>Bem-vindo</h2>
+      <p>
+        Banco de dados:{' '}
+        {isPending ? 'verificando…' : error ? `❌ ${error.message}` : `✅ ${data.db}`}
+      </p>
+    </section>
+  );
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\src\paginas\Pessoas.tsx
+================================================================================
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState, type FormEvent } from 'react';
+import { api } from '../api/cliente';
+
+type PessoaDto = {
+  id: number;
+  nome: string;
+  dataNascimento: string | null;
+  sexo: 'M' | 'F' | null;
+  foto: string | null;
+};
+
+async function enviarArquivo(id: number, arquivo: File) {
+  const dados = new FormData();
+  dados.append('foto', arquivo);
+  const resp = await fetch(`/api/pessoas/${id}/foto`, { method: 'POST', body: dados });
+  if (!resp.ok) {
+    const corpo = (await resp.json().catch(() => null)) as { erro?: string } | null;
+    throw new Error(corpo?.erro ?? `Erro ${resp.status}`);
+  }
+}
+
+type Form = { nome: string; dataNascimento: string; sexo: '' | 'M' | 'F' };
+const vazio: Form = { nome: '', dataNascimento: '', sexo: '' };
+
+export function Pessoas() {
+  const qc = useQueryClient();
+  const [form, setForm] = useState<Form>(vazio);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [fotoEscolhida, setFotoEscolhida] = useState<File | null>(null);
+  const [chaveInputFoto, setChaveInputFoto] = useState(0);
+  const previa = useMemo(
+    () => (fotoEscolhida ? URL.createObjectURL(fotoEscolhida) : null),
+    [fotoEscolhida],
+  );
+
+  const lista = useQuery({ queryKey: ['pessoas'], queryFn: () => api<PessoaDto[]>('/pessoas') });
+
+  const limpar = () => {
+    setForm(vazio);
+    setEditandoId(null);
+    setFotoEscolhida(null);
+    setChaveInputFoto((k) => k + 1);
+  };
+
+  const salvar = useMutation({
+    mutationFn: async () => {
+      const corpo = JSON.stringify({
+        nome: form.nome,
+        dataNascimento: form.dataNascimento || null,
+        sexo: form.sexo || null,
+      });
+      const salva =
+        editandoId === null
+          ? await api<PessoaDto>('/pessoas', { method: 'POST', body: corpo })
+          : await api<PessoaDto>(`/pessoas/${editandoId}`, { method: 'PUT', body: corpo });
+      if (fotoEscolhida) await enviarArquivo(salva.id, fotoEscolhida);
+      return salva;
+    },
+    onSuccess: () => {
+      limpar();
+      void qc.invalidateQueries({ queryKey: ['pessoas'] });
+    },
+  });
+
+  const excluir = useMutation({
+    mutationFn: (id: number) => api<void>(`/pessoas/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pessoas'] }),
+  });
+
+  const enviarFoto = useMutation({
+    mutationFn: ({ id, arquivo }: { id: number; arquivo: File }) => enviarArquivo(id, arquivo),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pessoas'] }),
+  });
+
+  const removerFoto = useMutation({
+    mutationFn: (id: number) => api<PessoaDto>(`/pessoas/${id}/foto`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pessoas'] }),
+  });
+
+  const aoEnviar = (e: FormEvent) => {
+    e.preventDefault();
+    salvar.mutate();
+  };
+
+  const editar = (p: PessoaDto) => {
+    setEditandoId(p.id);
+    setForm({ nome: p.nome, dataNascimento: p.dataNascimento ?? '', sexo: p.sexo ?? '' });
+  };
+
+  return (
+    <section>
+      <h2>Pessoas</h2>
+
+      <form className="form-pessoa" onSubmit={aoEnviar}>
+        <input
+          placeholder="Nome completo"
+          value={form.nome}
+          onChange={(e) => setForm({ ...form, nome: e.target.value })}
+          required
+          maxLength={150}
+        />
+        <input
+          type="date"
+          value={form.dataNascimento}
+          onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })}
+        />
+        <select
+          value={form.sexo}
+          onChange={(e) => setForm({ ...form, sexo: e.target.value as Form['sexo'] })}
+        >
+          <option value="">Sexo (opcional)</option>
+          <option value="M">Masculino</option>
+          <option value="F">Feminino</option>
+        </select>
+        <label className="botao secundario">
+          {fotoEscolhida ? 'Trocar foto' : 'Escolher foto'}
+          <input
+            key={chaveInputFoto}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            onChange={(e) => setFotoEscolhida(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        {previa && <img className="foto-mini" src={previa} alt="Prévia da foto" />}
+        <button type="submit" disabled={salvar.isPending}>
+          {editandoId === null ? 'Adicionar' : 'Salvar alterações'}
+        </button>
+        {editandoId !== null && (
+          <button type="button" className="secundario" onClick={limpar}>
+            Cancelar
+          </button>
+        )}
+      </form>
+      {salvar.error && <p className="erro">{salvar.error.message}</p>}
+      {excluir.error && <p className="erro">{excluir.error.message}</p>}
+      {enviarFoto.error && <p className="erro">{enviarFoto.error.message}</p>}
+      {removerFoto.error && <p className="erro">{removerFoto.error.message}</p>}
+
+      {lista.isPending && <p>Carregando…</p>}
+      {lista.error && <p className="erro">Erro: {lista.error.message}</p>}
+      {lista.data && (
+        <table className="tabela">
+          <thead>
+            <tr>
+              <th>Foto</th>
+              <th>Nome</th>
+              <th>Nascimento</th>
+              <th>Sexo</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {lista.data.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  {p.foto ? (
+                    <img className="foto-mini" src={`/api/uploads/${p.foto}`} alt={p.nome} />
+                  ) : (
+                    <span className="foto-mini vazia">{p.nome.charAt(0)}</span>
+                  )}
+                </td>
+                <td>{p.nome}</td>
+                <td>{p.dataNascimento ? p.dataNascimento.split('-').reverse().join('/') : '—'}</td>
+                <td>{p.sexo ?? '—'}</td>
+                <td>
+                  <div className="acoes">
+                  <label className="botao secundario">
+                    {p.foto ? 'Trocar foto' : 'Enviar foto'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      hidden
+                      onChange={(e) => {
+                        const arquivo = e.target.files?.[0];
+                        e.target.value = '';
+                        if (arquivo) enviarFoto.mutate({ id: p.id, arquivo });
+                      }}
+                    />
+                  </label>
+                  {p.foto && (
+                    <button type="button" className="secundario" onClick={() => removerFoto.mutate(p.id)}>
+                      Tirar foto
+                    </button>
+                  )}
+                  <button type="button" className="secundario" onClick={() => editar(p)}>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="perigo"
+                    onClick={() => {
+                      if (confirm(`Excluir ${p.nome}? Uniões e filiações dele(a) também serão removidas.`))
+                        excluir.mutate(p.id);
+                    }}
+                  >
+                    Excluir
+                  </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {lista.data.length === 0 && (
+              <tr>
+                <td colSpan={5}>Nenhuma pessoa cadastrada ainda.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\tsconfig.json
+================================================================================
+
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\web\vite.config.ts
+================================================================================
+
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: { '/api': 'http://localhost:3333' },
+  },
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: docker-compose.yml
+================================================================================
+
+# OPCIONAL: só use se NÃO quiser usar o PostgreSQL que já está instalado no seu computador.
+# Subir:   docker compose up -d
+# Derrubar: docker compose down
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: raizes
+      POSTGRES_PASSWORD: troque_esta_senha
+      POSTGRES_DB: raizes_v2
+    ports:
+      - "5432:5432"
+    volumes:
+      - raizes_pgdata:/var/lib/postgresql/data
+volumes:
+  raizes_pgdata:
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: docs\ARQUITETURA.md
+================================================================================
+
+# Arquitetura
+
+```
+raizes-memorias/
+├─ packages/domain   TypeScript puro: tipos, nomes curtos, (depois) layout da árvore e parentesco
+├─ apps/api          Fastify + Drizzle + PostgreSQL
+│   └─ modules/<x>   routes → service → repository
+└─ apps/web          React + Vite + TanStack Query
+```
+
+Regras:
+- `domain` não importa nada de api/web nem de bibliotecas de runtime; testável sozinho.
+- API em camadas: **routes** (HTTP + zod) → **service** (regras) → **repository** (SQL via Drizzle).
+- Tudo por **id**, nunca por nome. Parentesco é **derivado**, não gravado.
+- `createApp({ db })` permite testar a API com banco de teste.
+- Web fala com a API só via `src/api/cliente.ts`; dados do servidor via TanStack Query.
+- Fotos: caminho relativo em `pessoa.foto`, arquivos em `apps/api/uploads`.
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: docs\COMECE-AQUI.md
+================================================================================
+
+# Comece aqui
+
+## 1. O que baixar e instalar (uma vez só)
+
+| Item | Para quê | Onde |
+|---|---|---|
+| **Node.js 22 LTS** | roda TypeScript, API e Vite | nodejs.org |
+| **pnpm** | gerenciador de pacotes do monorepo | depois do Node: `corepack enable` (ou `npm i -g pnpm`) |
+| **Git** | versionamento | git-scm.com |
+| **PostgreSQL** | você já tem; crie o banco `raizes_v2` | pgAdmin/DBeaver para criar |
+| VS Code + extensões **ESLint**, **Prettier**, (opcional) **Error Lens** | editor | |
+| Docker Desktop (opcional) | alternativa ao Postgres local, via `docker-compose.yml` | |
+
+Dica: coloque o projeto em pasta **sem acento, sem "&" e fora do OneDrive**, ex.: `C:\dev\raizes-memorias`.
+
+## 2. Primeira execução
+
+```powershell
+cd C:\dev\raizes-memorias
+pnpm install
+copy apps\api\.env.example apps\api\.env     # edite usuário/senha do Postgres
+pnpm db:generate                              # gera a migração a partir do schema
+pnpm db:migrate                               # cria as tabelas em raizes_v2
+pnpm typecheck
+pnpm test
+pnpm dev                                      # API :3333 + Web :5173
+```
+
+Abra http://localhost:5173 — a tela Início mostra se o banco conectou.
+
+## 3. Se algo falhar
+As versões das dependências foram escritas sem poder rodar `pnpm install` aqui. Se algum pacote reclamar de versão, me mande a mensagem de erro que eu ajusto.
+
+## 4. Segurança
+Nunca coloque senha no código nem no git. Use só o `.env` (já ignorado). Como a senha antiga está no `ConexaoBanco.java`, considere trocá-la.
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: docs\MODELO-DE-DADOS.md
+================================================================================
+
+# Modelo de dados
+
+- **pessoa**(id, nome, data_nascimento, sexo M/F opcional, foto, criado_em)
+- **uniao**(id, pessoa_a_id, pessoa_b_id) — CHECK a<b, UNIQUE(a,b): um casal tem uma linha só
+- **filiacao**(id, filho_id, genitor_id, papel PAI|MAE) — UNIQUE(filho,papel), CHECK filho<>genitor
+
+Tudo com ON DELETE CASCADE. Irmão, avô, tio, primo etc. são calculados no código.
+
+## Migração dos dados do Java
+Script futuro lê `relacionamento` (PAI/MAE/CONJUGE) e gera `uniao` + `filiacao`; depois comparamos se a árvore sai idêntica.
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: docs\ROADMAP.md
+================================================================================
+
+# Roadmap
+
+1. [x] Esqueleto, configuração, nomes curtos com teste
+2. [ ] Conectar banco, rodar migração, tela Início verde
+3. [ ] CRUD de pessoas (API + tela)
+4. [ ] Uniões e filiações (API + tela Famílias)
+5. [ ] Portar `ArvoreLayout` com teste "golden" dos 40 nomes
+6. [ ] Tela Árvore em SVG (zoom, nomes curtos)
+7. [ ] Parentesco derivado
+8. [ ] Fotos (upload)
+9. [ ] Script de migração dos dados do Java
+10. [ ] Testes de API, polimento, entrega
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: package.json
+================================================================================
+
+{
+  "name": "raizes-memorias",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "dev:api": "pnpm --filter @raizes/api dev",
+    "dev:web": "pnpm --filter @raizes/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @raizes/api db:generate",
+    "db:migrate": "pnpm --filter @raizes/api db:migrate",
+    "db:studio": "pnpm --filter @raizes/api db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.15.0",
+    "globals": "^15.12.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.15.0"
+  }
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\package.json
+================================================================================
+
+{
+  "name": "@raizes/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\familias\ancestrais.test.ts
+================================================================================
+
+import { describe, expect, it } from 'vitest';
+import { ehAncestral } from './ancestrais';
+
+// 1 é pai de 2, 2 é pai de 3
+const filiacoes = [
+  { filhoId: 2, genitorId: 1 },
+  { filhoId: 3, genitorId: 2 },
+];
+
+describe('ehAncestral', () => {
+  it('reconhece pai e avô', () => {
+    expect(ehAncestral(filiacoes, 2, 3)).toBe(true);
+    expect(ehAncestral(filiacoes, 1, 3)).toBe(true);
+  });
+  it('não confunde descendente com ancestral', () => {
+    expect(ehAncestral(filiacoes, 3, 1)).toBe(false);
+  });
+  it('pessoa não é ancestral de si mesma sem ciclo', () => {
+    expect(ehAncestral(filiacoes, 3, 3)).toBe(false);
+  });
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\familias\ancestrais.ts
+================================================================================
+
+import type { Filiacao } from '../tipos';
+
+/**
+ * Verdadeiro se `ancestralId` é ancestral (pai, avô, bisavô...) de `pessoaId`.
+ * Usado para impedir ciclos: ninguém pode ser pai de um de seus próprios ancestrais.
+ */
+export function ehAncestral(
+  filiacoes: Pick<Filiacao, 'filhoId' | 'genitorId'>[],
+  ancestralId: number,
+  pessoaId: number,
+): boolean {
+  const genitoresDe = new Map<number, number[]>();
+  for (const f of filiacoes) {
+    const lista = genitoresDe.get(f.filhoId) ?? [];
+    lista.push(f.genitorId);
+    genitoresDe.set(f.filhoId, lista);
+  }
+  const visitados = new Set<number>();
+  const pilha = [pessoaId];
+  while (pilha.length > 0) {
+    const atual = pilha.pop()!;
+    for (const g of genitoresDe.get(atual) ?? []) {
+      if (g === ancestralId) return true;
+      if (!visitados.has(g)) {
+        visitados.add(g);
+        pilha.push(g);
+      }
+    }
+  }
+  return false;
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\index.ts
+================================================================================
+
+export * from './tipos';
+export { nomesCurtos } from './pessoa/nomeCurto';
+export { ehAncestral } from './familias/ancestrais';
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\pessoa\nomeCurto.test.ts
+================================================================================
+
+import { describe, expect, it } from 'vitest';
+import { nomesCurtos } from './nomeCurto';
+
+describe('nomesCurtos', () => {
+  const nomes = [
+    'Benedito Alves de Abreu',
+    'Maria de Abreu Araujo',
+    'Maria Celina de Abreu Araujo',
+    'Maria do Socorro de Abreu Araujo',
+    'Ze Luiz de Abreu',
+    'Pedro Bezerra de Araujo',
+    'Pedro Bezerra de Araujo Junior',
+    'Antonio Natal de sousa Abreu',
+    'Antonio de Sousa Abreu',
+  ];
+  const curtos = nomesCurtos(nomes.map((nome, i) => ({ id: i + 1, nome })));
+  const de = (nome: string) => curtos.get(nomes.indexOf(nome) + 1);
+
+  it('usa só o primeiro nome quando ele é único', () => {
+    expect(de('Benedito Alves de Abreu')).toBe('Benedito');
+  });
+
+  it('acrescenta palavras só até diferenciar', () => {
+    expect(de('Maria Celina de Abreu Araujo')).toBe('Maria Celina');
+    expect(de('Maria do Socorro de Abreu Araujo')).toBe('Maria do Socorro');
+    expect(de('Maria de Abreu Araujo')).toBe('Maria de Abreu');
+    expect(de('Antonio Natal de sousa Abreu')).toBe('Antonio Natal');
+    expect(de('Antonio de Sousa Abreu')).toBe('Antonio de Sousa');
+  });
+
+  it('nomes curtos ganham a segunda palavra', () => {
+    expect(de('Ze Luiz de Abreu')).toBe('Ze Luiz');
+  });
+
+  it('usa o nome inteiro quando nada mais diferencia', () => {
+    expect(de('Pedro Bezerra de Araujo')).toBe('Pedro Bezerra de Araujo');
+    expect(de('Pedro Bezerra de Araujo Junior')).toBe('Pedro Bezerra de Araujo Junior');
+  });
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\pessoa\nomeCurto.ts
+================================================================================
+
+const CONECTORES = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+
+function normalizar(texto: string): string {
+  return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+/** As primeiras n palavras "de verdade" (de/da/do não contam, mas ficam no texto). */
+function comPalavras(completo: string, n: number): string {
+  const partes = completo.trim().split(/\s+/);
+  const usadas: string[] = [];
+  let contadas = 0;
+
+  for (const parte of partes) {
+    const conector = CONECTORES.has(parte.toLowerCase());
+    if (!conector && contadas === n) break;
+    usadas.push(parte);
+    if (!conector) contadas++;
+  }
+  while (usadas.length > 0 && CONECTORES.has(usadas[usadas.length - 1]!.toLowerCase())) {
+    usadas.pop();
+  }
+
+  const texto = usadas.join(' ');
+  // nomes muito curtos (ex.: "Zé") ganham a segunda palavra
+  if (n === 1 && partes.length > 1 && texto.length <= 2) return comPalavras(completo, 2);
+  return texto;
+}
+
+/**
+ * Cada pessoa mostra o menor nome que a diferencia das outras
+ * (Maria, Maria Celina, Maria do Socorro...). Portado do ArvoreController em Java.
+ */
+export function nomesCurtos(pessoas: { id: number; nome: string }[]): Map<number, string> {
+  const resultado = new Map<number, string>();
+  const validas = pessoas.filter((p) => p.nome.trim() !== '');
+
+  for (let palavras = 1; palavras <= 12; palavras++) {
+    const candidatos = new Map<number, string>();
+    const contagem = new Map<string, number>();
+
+    for (const p of validas) {
+      const nome = comPalavras(p.nome, palavras);
+      candidatos.set(p.id, nome);
+      const chave = normalizar(nome);
+      contagem.set(chave, (contagem.get(chave) ?? 0) + 1);
+    }
+    for (const p of validas) {
+      if (resultado.has(p.id)) continue;
+      const nome = candidatos.get(p.id)!;
+      if (contagem.get(normalizar(nome)) === 1 || palavras === 12) resultado.set(p.id, nome);
+    }
+  }
+  return resultado;
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\tipos.ts
+================================================================================
+
+/**
+ * Tipos do domínio. Este pacote NÃO conhece banco, HTTP nem tela:
+ * só regras e cálculos puros, fáceis de testar.
+ */
+
+export type Sexo = 'M' | 'F';
+
+/** Papel de um genitor em relação ao filho. Não depende do sexo da pessoa. */
+export type PapelFiliacao = 'PAI' | 'MAE';
+
+export interface Pessoa {
+  id: number;
+  nome: string;
+  /** Formato AAAA-MM-DD */
+  dataNascimento: string | null;
+  sexo: Sexo | null;
+  /** Caminho RELATIVO da foto (ex.: "fotos/benedito.png") */
+  foto: string | null;
+}
+
+/** Casal. Sempre guardado com pessoaAId < pessoaBId, para não duplicar. */
+export interface Uniao {
+  id: number;
+  pessoaAId: number;
+  pessoaBId: number;
+}
+
+/** "genitorId é PAI/MAE de filhoId". Cada filho tem no máximo um PAI e uma MAE. */
+export interface Filiacao {
+  id: number;
+  filhoId: number;
+  genitorId: number;
+  papel: PapelFiliacao;
+}
+
+/** Uma família montada por id: quem são os pais e quais são os filhos. */
+export interface Familia {
+  paiId: number | null;
+  maeId: number | null;
+  filhosIds: number[];
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\tsconfig.json
+================================================================================
+
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src"]
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: pnpm-workspace.yaml
+================================================================================
+
+packages:
+  - "apps/*"
+  - "packages/*"
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: README.md
+================================================================================
+
+# Raízes & Memórias (TypeScript / Web)
+
+Reescrita web do app de genealogia. Veja **docs/COMECE-AQUI.md** para instalar e rodar, **docs/ARQUITETURA.md** para a estrutura.
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: tsconfig.base.json
+================================================================================
+
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
+  }
+}
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
