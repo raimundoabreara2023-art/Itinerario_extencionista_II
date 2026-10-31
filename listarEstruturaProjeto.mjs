@@ -3,9 +3,21 @@ import path from "node:path";
 
 const rootDir = process.cwd();
 
+const agora = new Date();
+
+const timestamp = [
+  agora.getFullYear(),
+  String(agora.getMonth() + 1).padStart(2, "0"),
+  String(agora.getDate()).padStart(2, "0")
+].join("-") + "_" + [
+  String(agora.getHours()).padStart(2, "0"),
+  String(agora.getMinutes()).padStart(2, "0"),
+  String(agora.getSeconds()).padStart(2, "0")
+].join("-");
+
 const arquivoSaida = path.join(
   rootDir,
-  "estrutura_projeto.txt"
+  `estrutura_projeto_${timestamp}.txt`
 );
 
 const pastasIgnoradas = [

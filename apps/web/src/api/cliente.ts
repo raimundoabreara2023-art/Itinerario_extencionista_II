@@ -8,6 +8,5 @@ export async function api<T>(caminho: string, init?: RequestInit): Promise<T> {
     throw new Error(corpo?.erro ?? `Erro ${resp.status}`);
   }
   if (resp.status === 204) return undefined as T;
-  if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
 }
