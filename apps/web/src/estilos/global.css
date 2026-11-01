@@ -13,12 +13,16 @@ body {
   font-family: Georgia, 'Times New Roman', serif;
 }
 .topo {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
   background: var(--pergaminho-escuro);
   border-bottom: 2px solid var(--marrom-claro);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* Sombra suave ao rolar a página */
 }
 .topo h1 { margin: 0; font-size: 1.4rem; }
 .topo nav { display: flex; gap: 16px; }
@@ -82,3 +86,27 @@ label.botao {
 label.botao.secundario { background: var(--marrom-claro); }
 
 button.secundario, label.botao.secundario { color: #fff; }
+
+/* árvore */
+.arvore-barra { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+.arvore-barra-grupo { display: flex; gap: 6px; align-items: center; }
+.arvore-zoom { min-width: 48px; text-align: center; font-size: 0.9rem; }
+.arvore-foco { display: flex; gap: 8px; align-items: center; font-size: 0.95rem; }
+.arvore-foco select, .arvore-busca {
+  padding: 8px 12px; border: 1px solid #dfd1bd; border-radius: 18px;
+  background: #fffefa; color: var(--marrom); font: inherit; font-size: 0.9rem;
+}
+.arvore-busca { margin-left: auto; min-width: 240px; }
+.arvore-area {
+  height: calc(100vh - 270px); min-height: 420px; overflow: auto;
+  border: 1px solid #e8d8bf; border-radius: 12px; background: #f7f2e9;
+}
+.arvore-area svg { display: block; margin: 0 auto; }
+.arvore-nome-caixa { text-align: center; }
+.arvore-nome {
+  display: inline-block; max-width: 100%; padding: 2px 9px;
+  font: 13px Georgia, serif; color: #3b2a18; line-height: 1.25;
+  background: #fbf5e8; border: 1px solid #d8bd8c; border-radius: 12px;
+}
+.arvore-nome.destaque { font-weight: bold; color: #7a4d10; border-color: #b8892f; }
+.arvore-sem-ligacao { margin-top: 12px; font-size: 0.9rem; }

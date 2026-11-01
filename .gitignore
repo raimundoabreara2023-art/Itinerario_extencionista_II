@@ -6,3 +6,7 @@ coverage
 .DS_Store
 apps/api/uploads/*
 !apps/api/uploads/.gitkeep
+# Arquivos de ambiente
+.env
+.env.*
+!.env.example

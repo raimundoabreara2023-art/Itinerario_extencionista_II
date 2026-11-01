@@ -47,6 +47,8 @@
     [DIR] web
       index.html
       package.json
+      [DIR] public
+        fundo_arvore.png
       [DIR] src
         [DIR] api
           cliente.ts
@@ -82,9 +84,13 @@
           .gitkeep
           ancestrais.test.ts
           ancestrais.ts
+          montarFamilias.test.ts
+          montarFamilias.ts
         index.ts
         [DIR] layout
           .gitkeep
+          arvoreLayout.test.ts
+          arvoreLayout.ts
         [DIR] parentesco
           .gitkeep
         [DIR] pessoa
@@ -721,7 +727,7 @@ ARQUIVO: apps\api\src\modules\familias\familias.routes.ts
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../../db/client.js';
 import { pessoasRepository } from '../pessoas/pessoas.repository.js';
-import { criarFiliacaoSchema, criarUniaoSchema, idParamSchema } from './familias.schema.js';
+import { criarFiliacaoLoteSchema, criarUniaoSchema, idParamSchema } from './familias.schema.js';
 import { familiasRepository } from './familias.repository.js';
 import { familiasService } from './familias.service.js';
 
@@ -739,7 +745,7 @@ export function familiasRoutes(db: Db) {
 
     app.get('/filiacoes', async () => service.listarFiliacoes());
     app.post('/filiacoes', async (req, reply) =>
-      reply.status(201).send(await service.criarFiliacao(criarFiliacaoSchema.parse(req.body))),
+      reply.status(201).send(await service.criarFiliacaoLote(criarFiliacaoLoteSchema.parse(req.body))),
     );
     app.delete('/filiacoes/:id', async (req, reply) => {
       await service.excluirFiliacao(idParamSchema.parse(req.params).id);
@@ -747,7 +753,6 @@ export function familiasRoutes(db: Db) {
     });
   };
 }
-
 
 ================================================================================
 FIM DO ARQUIVO
@@ -762,16 +767,18 @@ import { z } from 'zod';
 const id = z.number().int().positive();
 
 export const criarUniaoSchema = z.object({ pessoaAId: id, pessoaBId: id });
-export const criarFiliacaoSchema = z.object({
-  filhoId: id,
+
+// Exportação que estava faltando na API:
+export const criarFiliacaoLoteSchema = z.object({
+  filhosIds: z.array(id).min(1, 'Selecione pelo menos um filho'),
   genitorId: id,
   papel: z.enum(['PAI', 'MAE']),
 });
+
 export const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
 export type CriarUniao = z.infer<typeof criarUniaoSchema>;
-export type CriarFiliacao = z.infer<typeof criarFiliacaoSchema>;
-
+export type CriarFiliacaoLote = z.infer<typeof criarFiliacaoLoteSchema>;
 
 ================================================================================
 FIM DO ARQUIVO
@@ -785,7 +792,7 @@ import { ehAncestral } from '@raizes/domain';
 import { ErroNegocio, naoEncontrado } from '../../shared/erros.js';
 import type { PessoasRepository } from '../pessoas/pessoas.repository.js';
 import type { FamiliasRepository } from './familias.repository.js';
-import type { CriarFiliacao, CriarUniao } from './familias.schema.js';
+import type { CriarFiliacaoLote, CriarUniao } from './familias.schema.js';
 
 export function familiasService(repo: FamiliasRepository, pessoas: PessoasRepository) {
   const exigirPessoa = async (id: number) => {
@@ -800,36 +807,49 @@ export function familiasService(repo: FamiliasRepository, pessoas: PessoasReposi
       if (pessoaAId === pessoaBId) throw new ErroNegocio('Uma pessoa não pode se unir a ela mesma');
       await exigirPessoa(pessoaAId);
       await exigirPessoa(pessoaBId);
-      // sempre grava com a < b, para o casal existir uma vez só
       const a = Math.min(pessoaAId, pessoaBId);
       const b = Math.max(pessoaAId, pessoaBId);
       if (await repo.buscarUniao(a, b)) throw new ErroNegocio('Esse casal já está cadastrado', 409);
       return repo.criarUniao(a, b);
     },
+
     async excluirUniao(id: number) {
       if (!(await repo.excluirUniao(id))) throw naoEncontrado('União');
     },
 
-    async criarFiliacao({ filhoId, genitorId, papel }: CriarFiliacao) {
-      if (filhoId === genitorId) throw new ErroNegocio('Ninguém pode ser pai/mãe de si mesmo');
-      await exigirPessoa(filhoId);
+    async criarFiliacaoLote({ filhosIds, genitorId, papel }: CriarFiliacaoLote) {
       await exigirPessoa(genitorId);
-      if (await repo.buscarFiliacaoDoFilho(filhoId, papel)) {
-        throw new ErroNegocio(`Essa pessoa já tem ${papel === 'PAI' ? 'um pai' : 'uma mãe'} cadastrado(a)`, 409);
-      }
       const todas = await repo.listarFiliacoes();
-      // o "filho" não pode ser ancestral do genitor (evita ciclos na árvore)
-      if (ehAncestral(todas, filhoId, genitorId)) {
-        throw new ErroNegocio('Isso criaria um ciclo: o filho já é ancestral dessa pessoa');
+      const resultados = [];
+
+      for (const filhoId of filhosIds) {
+        if (filhoId === genitorId) {
+          throw new ErroNegocio('Ninguém pode ser pai/mãe de si mesmo');
+        }
+        await exigirPessoa(filhoId);
+
+        if (await repo.buscarFiliacaoDoFilho(filhoId, papel)) {
+          const nomePapel = papel === 'PAI' ? 'um pai' : 'uma mãe';
+          throw new ErroNegocio(`Uma das pessoas selecionadas já tem ${nomePapel} cadastrado(a)`, 409);
+        }
+
+        if (ehAncestral(todas, filhoId, genitorId)) {
+          throw new ErroNegocio('Isso criaria um ciclo: o filho já é ancestral dessa pessoa');
+        }
+
+        const nova = await repo.criarFiliacao(filhoId, genitorId, papel);
+        resultados.push(nova);
+        todas.push({ id: nova.id, filhoId, genitorId, papel });
       }
-      return repo.criarFiliacao(filhoId, genitorId, papel);
+
+      return resultados;
     },
+
     async excluirFiliacao(id: number) {
       if (!(await repo.excluirFiliacao(id))) throw naoEncontrado('Filiação');
     },
   };
 }
-
 
 ================================================================================
 FIM DO ARQUIVO
@@ -1150,7 +1170,6 @@ export async function api<T>(caminho: string, init?: RequestInit): Promise<T> {
     throw new Error(corpo?.erro ?? `Erro ${resp.status}`);
   }
   if (resp.status === 204) return undefined as T;
-  if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
 }
 
@@ -1217,12 +1236,16 @@ body {
   font-family: Georgia, 'Times New Roman', serif;
 }
 .topo {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
   background: var(--pergaminho-escuro);
   border-bottom: 2px solid var(--marrom-claro);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* Sombra suave ao rolar a página */
 }
 .topo h1 { margin: 0; font-size: 1.4rem; }
 .topo nav { display: flex; gap: 16px; }
@@ -1287,6 +1310,30 @@ label.botao.secundario { background: var(--marrom-claro); }
 
 button.secundario, label.botao.secundario { color: #fff; }
 
+/* árvore */
+.arvore-barra { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+.arvore-barra-grupo { display: flex; gap: 6px; align-items: center; }
+.arvore-zoom { min-width: 48px; text-align: center; font-size: 0.9rem; }
+.arvore-foco { display: flex; gap: 8px; align-items: center; font-size: 0.95rem; }
+.arvore-foco select, .arvore-busca {
+  padding: 8px 12px; border: 1px solid #dfd1bd; border-radius: 18px;
+  background: #fffefa; color: var(--marrom); font: inherit; font-size: 0.9rem;
+}
+.arvore-busca { margin-left: auto; min-width: 240px; }
+.arvore-area {
+  height: calc(100vh - 270px); min-height: 420px; overflow: auto;
+  border: 1px solid #e8d8bf; border-radius: 12px; background: #f7f2e9;
+}
+.arvore-area svg { display: block; margin: 0 auto; }
+.arvore-nome-caixa { text-align: center; }
+.arvore-nome {
+  display: inline-block; max-width: 100%; padding: 2px 9px;
+  font: 13px Georgia, serif; color: #3b2a18; line-height: 1.25;
+  background: #fbf5e8; border: 1px solid #d8bd8c; border-radius: 12px;
+}
+.arvore-nome.destaque { font-weight: bold; color: #7a4d10; border-color: #b8892f; }
+.arvore-sem-ligacao { margin-top: 12px; font-size: 0.9rem; }
+
 
 ================================================================================
 FIM DO ARQUIVO
@@ -1324,8 +1371,424 @@ FIM DO ARQUIVO
 ARQUIVO: apps\web\src\paginas\Arvore.tsx
 ================================================================================
 
+import { useQuery } from '@tanstack/react-query';
+import {
+  ALTURA_LINHA,
+  LARGURA_NO,
+  calcularLayout,
+  montarFamilias,
+  nomesCurtos,
+  type Familia,
+} from '@raizes/domain';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { api } from '../api/cliente';
+
+type PessoaDto = { id: number; nome: string; foto: string | null };
+type UniaoDto = { id: number; pessoaAId: number; pessoaBId: number };
+type FiliacaoDto = { id: number; filhoId: number; genitorId: number; papel: 'PAI' | 'MAE' };
+
+// ---- medidas do desenho (as mesmas da versão JavaFX) ----------------------
+const RAIO_ANEL = 35;
+const RAIO_FOTO = 32;
+const LARGURA_CARTAO = LARGURA_NO - 4;
+const TOPO = 40;
+const MARGEM_ROTULOS = 190;
+const RAIO_CORACAO = 11;
+const COR_RAMO = '#8a6a47';
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 1.6;
+
+const TITULOS_5 = [
+  'I Geração\n(bisavós)',
+  'II Geração\n(avós)',
+  'III Geração\n(pais)',
+  'IV Geração\n(filhos)',
+  'V Geração\n(netos)',
+];
+const ROMANOS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+const semAcento = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const topoDaLinha = (linha: number) => TOPO + linha * ALTURA_LINHA;
+
 export function Arvore() {
-  return <p>Tela de Arvore — a implementar (veja docs/ROADMAP.md).</p>;
+  const pessoas = useQuery({ queryKey: ['pessoas'], queryFn: () => api<PessoaDto[]>('/pessoas') });
+  const unioes = useQuery({ queryKey: ['unioes'], queryFn: () => api<UniaoDto[]>('/unioes') });
+  const filiacoes = useQuery({
+    queryKey: ['filiacoes'],
+    queryFn: () => api<FiliacaoDto[]>('/filiacoes'),
+  });
+
+  const [busca, setBusca] = useState('');
+  const [focoEscolhido, setFocoEscolhido] = useState<number | null | undefined>(undefined);
+  const [zoom, setZoom] = useState(1);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const ajusteInicialFeito = useRef(false);
+
+  const dados = useMemo(() => {
+    if (!pessoas.data || !unioes.data || !filiacoes.data) return null;
+    const familias: Familia[] = montarFamilias(unioes.data, filiacoes.data);
+    const layout = calcularLayout(familias);
+    const porId = new Map(pessoas.data.map((p) => [p.id, p]));
+    const noLayout = pessoas.data.filter((p) => layout.x.has(p.id));
+    const curtos = nomesCurtos(noLayout);
+    const semLigacao = pessoas.data.filter((p) => !layout.x.has(p.id));
+    return { layout, porId, curtos, semLigacao };
+  }, [pessoas.data, unioes.data, filiacoes.data]);
+
+  // pessoa em foco: por padrão, a primeira da última geração
+  const focoPadrao = useMemo(() => {
+    if (!dados) return null;
+    let melhor: number | null = null;
+    let maior = -1;
+    for (const [id, linha] of dados.layout.linha) {
+      if (linha > maior) {
+        maior = linha;
+        melhor = id;
+      }
+    }
+    return melhor;
+  }, [dados]);
+  const foco = focoEscolhido === undefined ? focoPadrao : focoEscolhido;
+
+  const linhaDireta = useMemo(() => {
+    const direta = new Set<number>();
+    if (!dados || foco === null) return direta;
+    const pilha = [foco];
+    while (pilha.length > 0) {
+      const atual = pilha.pop()!;
+      if (direta.has(atual)) continue;
+      direta.add(atual);
+      pilha.push(...(dados.layout.pais.get(atual) ?? []));
+    }
+    return direta;
+  }, [dados, foco]);
+
+  const largura = dados ? dados.layout.largura + MARGEM_ROTULOS : 0;
+  const altura = dados ? TOPO + dados.layout.totalLinhas * ALTURA_LINHA + 90 : 0;
+
+  const zoomParaLargura = () => {
+    const w = areaRef.current?.clientWidth ?? 0;
+    if (w <= 0 || largura <= 0) return 1;
+    return Math.min(1, (w - 30) / largura);
+  };
+  const zoomParaTudo = () => {
+    const h = areaRef.current?.clientHeight ?? 0;
+    if (h <= 0 || altura <= 0) return zoomParaLargura();
+    return Math.min(zoomParaLargura(), (h - 30) / altura);
+  };
+  const limitar = (z: number) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+
+  // ajuste inicial: a árvore cabe na largura da janela
+  useLayoutEffect(() => {
+    if (dados && !ajusteInicialFeito.current && largura > 0) {
+      ajusteInicialFeito.current = true;
+      setZoom(limitar(zoomParaLargura()));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dados, largura]);
+
+  // Ctrl + roda do mouse = zoom
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const aoRolar = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom((z) => limitar(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    };
+    el.addEventListener('wheel', aoRolar, { passive: false });
+    return () => el.removeEventListener('wheel', aoRolar);
+  }, [dados]);
+
+  if (pessoas.isPending || unioes.isPending || filiacoes.isPending) return <p>Carregando…</p>;
+  const erro = pessoas.error ?? unioes.error ?? filiacoes.error;
+  if (erro) return <p className="erro">Erro: {erro.message}</p>;
+  if (!dados) return null;
+
+  const { layout, porId, curtos, semLigacao } = dados;
+  const filtro = semAcento(busca.trim());
+  const combina = (id: number) =>
+    filtro === '' || semAcento(porId.get(id)?.nome ?? '').includes(filtro);
+
+  const barra = (
+    <div className="arvore-barra">
+      <div className="arvore-barra-grupo">
+        <button type="button" className="secundario" onClick={() => setZoom((z) => limitar(z / 1.15))}>
+          −
+        </button>
+        <button type="button" className="secundario" onClick={() => setZoom(limitar(zoomParaTudo()))}>
+          Ajustar
+        </button>
+        <button type="button" className="secundario" onClick={() => setZoom((z) => limitar(z * 1.15))}>
+          +
+        </button>
+        <span className="arvore-zoom">{Math.round(zoom * 100)}%</span>
+      </div>
+      <label className="arvore-foco">
+        Linha direta de
+        <select
+          value={foco ?? ''}
+          onChange={(e) => setFocoEscolhido(e.target.value === '' ? null : Number(e.target.value))}
+        >
+          <option value="">(ninguém)</option>
+          {[...layout.x.keys()].map((id) => (
+            <option key={id} value={id}>
+              {porId.get(id)?.nome ?? `#${id}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <input
+        className="arvore-busca"
+        placeholder="⌕  Buscar na árvore..."
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+      />
+    </div>
+  );
+
+  if (layout.x.size === 0) {
+    return (
+      <section>
+        <h2>Árvore</h2>
+        <p>
+          Ainda não há ligações para desenhar. Cadastre casais e vínculos de pais e filhos na tela{' '}
+          <strong>Famílias</strong>.
+        </p>
+      </section>
+    );
+  }
+
+  const nomeFoco = foco !== null ? (porId.get(foco)?.nome.split(' ')[0] ?? '') : '';
+
+  return (
+    <section>
+      <h2>Árvore</h2>
+      {barra}
+      {layout.avisos.length > 0 && (
+        <p className="erro">
+          Atenção: {layout.avisos.length} ligação(ões) foram ignoradas no desenho porque uma pessoa
+          aparece em mais de um casal.
+        </p>
+      )}
+
+      <div className="arvore-area" ref={areaRef}>
+        <svg
+          width={largura * zoom}
+          height={altura * zoom}
+          viewBox={`0 0 ${largura} ${altura}`}
+          role="img"
+          aria-label="Árvore genealógica"
+        >
+          <defs>
+            <radialGradient id="fundo-radial" cx="50%" cy="40%" r="75%">
+              <stop offset="0%" stopColor="#fbf5e6" />
+              <stop offset="70%" stopColor="#f3e8d0" />
+              <stop offset="100%" stopColor="#ead9b8" />
+            </radialGradient>
+            <linearGradient id="rotulo-grad" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stopColor="#eadcc0" />
+              <stop offset="100%" stopColor="#f3e8d0" />
+            </linearGradient>
+            <filter id="sombra" x="-30%" y="-30%" width="160%" height="170%">
+              <feDropShadow dx="0" dy="3" stdDeviation="3.5" floodColor="#503214" floodOpacity="0.28" />
+            </filter>
+            {[...layout.x.keys()].map((id) => {
+              const cx = layout.x.get(id)! + MARGEM_ROTULOS;
+              const cy = topoDaLinha(layout.linha.get(id)!) + RAIO_ANEL;
+              return (
+                <clipPath id={`foto-${id}`} key={id}>
+                  <circle cx={cx} cy={cy} r={RAIO_FOTO} />
+                </clipPath>
+              );
+            })}
+          </defs>
+
+          {/* fundo */}
+          <rect width={largura} height={altura} fill="url(#fundo-radial)" />
+          <image
+            href="/fundo_arvore.png"
+            width={largura}
+            height={altura}
+            preserveAspectRatio="none"
+          />
+
+          {/* ramos e casais */}
+          {layout.casais.map((c, i) => {
+            const cx = c.centroX + MARGEM_ROTULOS;
+            const topo = topoDaLinha(c.linha);
+            const yFoto = topo + RAIO_ANEL;
+            let origemY: number;
+            const partes: ReactNode[] = [];
+
+            if (c.direitaId !== null) {
+              const xe = layout.x.get(c.esquerdaId)! + MARGEM_ROTULOS;
+              const xd = layout.x.get(c.direitaId)! + MARGEM_ROTULOS;
+              partes.push(
+                <line
+                  key="liga"
+                  x1={Math.min(xe, xd)}
+                  y1={yFoto}
+                  x2={Math.max(xe, xd)}
+                  y2={yFoto}
+                  stroke={COR_RAMO}
+                  strokeWidth={2.2}
+                />,
+              );
+              origemY = yFoto + RAIO_CORACAO;
+            } else {
+              origemY = topo + 2 * RAIO_ANEL + 30; // abaixo do nome
+            }
+
+            c.filhosIds.forEach((filho) => {
+              const fx = layout.x.get(filho)! + MARGEM_ROTULOS;
+              const fy = topoDaLinha(layout.linha.get(filho)!) - 1;
+              const m = (fy - origemY) * 0.55;
+              partes.push(
+                <path
+                  key={`ramo-${filho}`}
+                  d={`M ${cx} ${origemY} C ${cx} ${origemY + m}, ${fx} ${fy - m}, ${fx} ${fy}`}
+                  fill="none"
+                  stroke={COR_RAMO}
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                />,
+              );
+            });
+            return <g key={i}>{partes}</g>;
+          })}
+
+          {/* corações */}
+          {layout.casais
+            .filter((c) => c.direitaId !== null)
+            .map((c, i) => {
+              const cx = c.centroX + MARGEM_ROTULOS;
+              const cy = topoDaLinha(c.linha) + RAIO_ANEL;
+              return (
+                <g key={`cor-${i}`}>
+                  <circle cx={cx} cy={cy} r={RAIO_CORACAO} fill="#fbf5e8" stroke="#c9a46a" strokeWidth={1.5} />
+                  <text
+                    x={cx}
+                    y={cy + 4.5}
+                    textAnchor="middle"
+                    fontSize={12}
+                    fill="#b3263e"
+                    style={{ userSelect: 'none' }}
+                  >
+                    ♥
+                  </text>
+                </g>
+              );
+            })}
+
+          {/* pessoas */}
+          {[...layout.x.entries()].map(([id, x]) => {
+            const p = porId.get(id);
+            if (!p) return null;
+            const cx = x + MARGEM_ROTULOS;
+            const topo = topoDaLinha(layout.linha.get(id)!);
+            const cy = topo + RAIO_ANEL;
+            const destaque = linhaDireta.has(id);
+            const nome = curtos.get(id) ?? p.nome;
+            return (
+              <g key={id} opacity={combina(id) ? 1 : 0.22}>
+                <title>{p.nome}</title>
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={RAIO_ANEL}
+                  fill={destaque ? '#b8892f' : '#fbf5e8'}
+                  stroke={COR_RAMO}
+                  strokeWidth={1.5}
+                  filter="url(#sombra)"
+                />
+                {p.foto ? (
+                  <image
+                    href={`/api/uploads/${p.foto}`}
+                    x={cx - RAIO_FOTO}
+                    y={cy - RAIO_FOTO}
+                    width={2 * RAIO_FOTO}
+                    height={2 * RAIO_FOTO}
+                    preserveAspectRatio="xMidYMid slice"
+                    clipPath={`url(#foto-${id})`}
+                  />
+                ) : (
+                  <g clipPath={`url(#foto-${id})`}>
+                    <circle cx={cx} cy={cy} r={RAIO_FOTO} fill="#cbd5e1" />
+                    <circle cx={cx} cy={cy - 7} r={11} fill="#1e2a3a" />
+                    <ellipse cx={cx} cy={cy + RAIO_FOTO - 2} rx={21} ry={20} fill="#1e2a3a" />
+                  </g>
+                )}
+                <foreignObject
+                  x={cx - LARGURA_CARTAO / 2}
+                  y={topo + 2 * RAIO_ANEL + 5}
+                  width={LARGURA_CARTAO}
+                  height={64}
+                >
+                  <div className="arvore-nome-caixa">
+                    <span className={destaque ? 'arvore-nome destaque' : 'arvore-nome'}>{nome}</span>
+                  </div>
+                </foreignObject>
+              </g>
+            );
+          })}
+
+          {/* rótulos das gerações */}
+          {Array.from({ length: layout.totalLinhas }, (_, i) => {
+            const titulo =
+              layout.totalLinhas === 5 ? TITULOS_5[i]! : `${ROMANOS[i + 1] ?? i + 1} Geração`;
+            const linhas = titulo.split('\n');
+            const y0 = topoDaLinha(i) + 8;
+            const h = 18 * linhas.length + 16;
+            const r = Math.min(28, h / 2);
+            return (
+              <g key={`ger-${i}`} pointerEvents="none">
+                <path
+                  d={`M 0 ${y0} H ${140 - r} A ${r} ${r} 0 0 1 140 ${y0 + r} V ${y0 + h - r} A ${r} ${r} 0 0 1 ${140 - r} ${y0 + h} H 0 Z`}
+                  fill="url(#rotulo-grad)"
+                />
+                {linhas.map((t, k) => (
+                  <text
+                    key={k}
+                    x={75}
+                    y={y0 + 16 + 4 + k * 18}
+                    textAnchor="middle"
+                    fontSize={14}
+                    fill="#5a4128"
+                    fontFamily="Georgia, serif"
+                  >
+                    {t}
+                  </text>
+                ))}
+              </g>
+            );
+          })}
+
+          {/* legenda */}
+          <g transform={`translate(24 ${altura - 64})`} pointerEvents="none">
+            <rect width={470} height={40} rx={20} fill="#fbf5e8" fillOpacity={0.92} stroke="#d8bd8c" />
+            <circle cx={26} cy={20} r={9} fill="#fbf5e8" stroke="#b8892f" strokeWidth={3} />
+            <text x={42} y={25} fontSize={12} fill="#5a4128" fontFamily="Georgia, serif">
+              {nomeFoco ? `Linha direta de ${nomeFoco}` : 'Linha direta'}
+            </text>
+            <text x={190} y={26} fontSize={13} fill="#b3263e">
+              ♥
+            </text>
+            <text x={208} y={25} fontSize={12} fill="#5a4128" fontFamily="Georgia, serif">
+              Casal · os ramos descem para os filhos
+            </text>
+          </g>
+        </svg>
+      </div>
+
+      {semLigacao.length > 0 && (
+        <p className="arvore-sem-ligacao">
+          <strong>Sem ligações (não aparecem na árvore):</strong>{' '}
+          {semLigacao.map((p) => p.nome).join(' · ')}
+        </p>
+      )}
+    </section>
+  );
 }
 
 
@@ -1338,30 +1801,18 @@ ARQUIVO: apps\web\src\paginas\Familias.tsx
 ================================================================================
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { api } from '../api/cliente';
+import { nomesCurtos } from '@raizes/domain';
 
-type PessoaDto = { id: number; nome: string };
+type PessoaDto = {
+  id: number;
+  nome: string;
+  dataNascimento: string | null;
+  sexo: 'M' | 'F' | null;
+};
 type UniaoDto = { id: number; pessoaAId: number; pessoaBId: number };
 type FiliacaoDto = { id: number; filhoId: number; genitorId: number; papel: 'PAI' | 'MAE' };
-
-function SelectPessoa(props: {
-  valor: string;
-  onChange: (v: string) => void;
-  pessoas: PessoaDto[];
-  rotulo: string;
-}) {
-  return (
-    <select value={props.valor} onChange={(e) => props.onChange(e.target.value)} required>
-      <option value="">{props.rotulo}</option>
-      {props.pessoas.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.nome}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 export function Familias() {
   const qc = useQueryClient();
@@ -1372,14 +1823,66 @@ export function Familias() {
     queryFn: () => api<FiliacaoDto[]>('/filiacoes'),
   });
 
-  const nomes = new Map((pessoas.data ?? []).map((p) => [p.id, p.nome]));
-  const nome = (id: number) => nomes.get(id) ?? `#${id}`;
+  const listaPessoas = pessoas.data ?? [];
+  const listaUnioes = unioes.data ?? [];
+  const listaFiliacoes = filiacoes.data ?? [];
 
+  // Cálculo seguro de nomes curtos com fallback direto para o nome completo
+  let mapaNomesCurtos = new Map<number, string>();
+  try {
+    if (typeof nomesCurtos === 'function' && listaPessoas.length > 0) {
+      mapaNomesCurtos = nomesCurtos(listaPessoas);
+    }
+  } catch {
+    // Caso ocorra algum erro na função de domínio, usa o nome normal
+  }
+
+  const nome = (id: number) =>
+    mapaNomesCurtos.get(id) ?? listaPessoas.find((p) => p.id === id)?.nome ?? `#${id}`;
+
+  const mapaPessoas = new Map(listaPessoas.map((p) => [p.id, p]));
+
+  // Conjunto de IDs de pessoas que já estão em algum casal
+  const pessoasEmCasal = useMemo(() => {
+    const ids = new Set<number>();
+    for (const u of listaUnioes) {
+      ids.add(u.pessoaAId);
+      ids.add(u.pessoaBId);
+    }
+    return ids;
+  }, [listaUnioes]);
+
+  // Mapeamento de quais genitores cada filho já possui
+  const genitoresPorFilho = useMemo(() => {
+    const mapa = new Map<number, { paiId?: number; maeId?: number }>();
+    for (const f of listaFiliacoes) {
+      const atual = mapa.get(f.filhoId) ?? {};
+      if (f.papel === 'PAI') atual.paiId = f.genitorId;
+      if (f.papel === 'MAE') atual.maeId = f.genitorId;
+      mapa.set(f.filhoId, atual);
+    }
+    return mapa;
+  }, [listaFiliacoes]);
+
+  // Estados para Casais
   const [pessoaA, setPessoaA] = useState('');
   const [pessoaB, setPessoaB] = useState('');
-  const [filho, setFilho] = useState('');
-  const [genitor, setGenitor] = useState('');
-  const [papel, setPapel] = useState<'PAI' | 'MAE'>('PAI');
+
+  // Estados para Vínculo de Filhos
+  const [origem, setOrigem] = useState('');
+  const [papelSolo, setPapelSolo] = useState<'PAI' | 'MAE'>('MAE');
+  const [filhosSelecionadosIds, setFilhosSelecionadosIds] = useState<number[]>([]);
+
+  // Filtros para Candidatos a Casal (remove quem já está em união)
+  const candidatasPessoaA = listaPessoas.filter(
+    (p) => !pessoasEmCasal.has(p.id) && (p.sexo === 'M' || !p.sexo),
+  );
+  const candidatasPessoaB = listaPessoas.filter(
+    (p) => !pessoasEmCasal.has(p.id) && (p.sexo === 'F' || !p.sexo),
+  );
+
+  // Filtros para Pai ou Mãe Solo (remove quem já está em união)
+  const pessoasSoloDisponiveis = listaPessoas.filter((p) => !pessoasEmCasal.has(p.id));
 
   const criarUniao = useMutation({
     mutationFn: () =>
@@ -1393,50 +1896,177 @@ export function Familias() {
       void qc.invalidateQueries({ queryKey: ['unioes'] });
     },
   });
+
   const excluirUniao = useMutation({
     mutationFn: (id: number) => api<void>(`/unioes/${id}`, { method: 'DELETE' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['unioes'] }),
   });
 
-  const criarFiliacao = useMutation({
-    mutationFn: () =>
-      api<FiliacaoDto>('/filiacoes', {
-        method: 'POST',
-        body: JSON.stringify({ filhoId: Number(filho), genitorId: Number(genitor), papel }),
-      }),
+  const criarFiliacaoLote = useMutation({
+    mutationFn: async () => {
+      if (filhosSelecionadosIds.length === 0) throw new Error('Selecione pelo menos um filho.');
+
+      if (origem.startsWith('p:')) {
+        const genitorId = Number(origem.slice(2));
+        if (!mapaPessoas.has(genitorId)) throw new Error('Selecione o pai ou a mãe.');
+        await api('/filiacoes', {
+          method: 'POST',
+          body: JSON.stringify({ filhosIds: filhosSelecionadosIds, genitorId, papel: papelSolo }),
+        });
+        return;
+      }
+
+      const uniaoObj = listaUnioes.find((u) => u.id === Number(origem.slice(2)));
+      if (!uniaoObj) throw new Error('Selecione um casal ou um pai/mãe solo.');
+
+      const pessoaAObj = mapaPessoas.get(uniaoObj.pessoaAId);
+      const pessoaBObj = mapaPessoas.get(uniaoObj.pessoaBId);
+
+      const paiId = pessoaAObj?.sexo === 'M' ? pessoaAObj.id : pessoaBObj?.sexo === 'M' ? pessoaBObj.id : pessoaAObj?.id;
+      const maeId = pessoaAObj?.sexo === 'F' ? pessoaAObj.id : pessoaBObj?.sexo === 'F' ? pessoaBObj.id : pessoaBObj?.id;
+
+      const promessas = [];
+      if (paiId) {
+        promessas.push(
+          api('/filiacoes', {
+            method: 'POST',
+            body: JSON.stringify({ filhosIds: filhosSelecionadosIds, genitorId: paiId, papel: 'PAI' }),
+          }),
+        );
+      }
+      if (maeId) {
+        promessas.push(
+          api('/filiacoes', {
+            method: 'POST',
+            body: JSON.stringify({ filhosIds: filhosSelecionadosIds, genitorId: maeId, papel: 'MAE' }),
+          }),
+        );
+      }
+      await Promise.all(promessas);
+    },
     onSuccess: () => {
-      setFilho('');
-      setGenitor('');
+      setOrigem('');
+      setFilhosSelecionadosIds([]);
       void qc.invalidateQueries({ queryKey: ['filiacoes'] });
     },
   });
+
   const excluirFiliacao = useMutation({
-    mutationFn: (id: number) => api<void>(`/filiacoes/${id}`, { method: 'DELETE' }),
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => api<void>(`/filiacoes/${id}`, { method: 'DELETE' })));
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['filiacoes'] }),
   });
 
-  const lista = pessoas.data ?? [];
-  const aoEnviar = (acao: () => void) => (e: FormEvent) => {
-    e.preventDefault();
-    acao();
-  };
+  // Identificação do contexto atual (Casal ou Solo)
+  const uniaoAtual = origem.startsWith('u:')
+    ? listaUnioes.find((u) => u.id === Number(origem.slice(2)))
+    : undefined;
+  const soloAtual = origem.startsWith('p:') ? mapaPessoas.get(Number(origem.slice(2))) : undefined;
+
+  const maeAtual = uniaoAtual
+    ? [mapaPessoas.get(uniaoAtual.pessoaAId), mapaPessoas.get(uniaoAtual.pessoaBId)].find(
+        (p) => p?.sexo === 'F',
+      ) ?? mapaPessoas.get(uniaoAtual.pessoaBId)
+    : soloAtual;
+
+  const rotuloReferencia = uniaoAtual ? 'a mãe' : 'o pai/mãe';
+  const anoNascimentoMae = maeAtual?.dataNascimento ? Number(maeAtual.dataNascimento.substring(0, 4)) : null;
+
+  // Filtragem de Filhos Disponíveis:
+  // - Evita que o próprio genitor seja selecionado como filho
+  // - Se for Casal: oculta filhos que já tenham AMBOS os pais cadastrados
+  // - Se for Pai/Mãe Solo: oculta filhos que já tenham aquele genitor específico cadastrado
+  // - Respeita a regra de idade mínima (10 anos de diferença)
+  const filhosDisponiveis = listaPessoas.filter((p) => {
+    if (uniaoAtual && (p.id === uniaoAtual.pessoaAId || p.id === uniaoAtual.pessoaBId)) return false;
+    if (soloAtual && p.id === soloAtual.id) return false;
+
+    const g = genitoresPorFilho.get(p.id);
+
+    if (uniaoAtual) {
+      // Se for casal, não mostra se já tem pai E mãe definidos
+      if (g?.paiId && g?.maeId) return false;
+    } else if (soloAtual) {
+      // Se for solo, não mostra se já tem este genitor específico cadastrado
+      if (papelSolo === 'PAI' && g?.paiId === soloAtual.id) return false;
+      if (papelSolo === 'MAE' && g?.maeId === soloAtual.id) return false;
+    }
+
+    if (!anoNascimentoMae) return true;
+    if (!p.dataNascimento) return true;
+    const anoNascimentoFilho = Number(p.dataNascimento.substring(0, 4));
+    return anoNascimentoFilho >= anoNascimentoMae + 10;
+  });
+
+  // Agrupamento por Núcleo Familiar para Vínculos Existentes
+  const gruposFamiliares = useMemo(() => {
+    const mapa = new Map<string, { chave: string; paiId?: number; maeId?: number; filhos: Array<{ filhoId: number; filiacaoIds: number[] }> }>();
+    const genitoresTemp = new Map<number, { paiId?: number; maeId?: number; paiFiliacaoId?: number; maeFiliacaoId?: number }>();
+
+    for (const f of listaFiliacoes) {
+      const atual = genitoresTemp.get(f.filhoId) ?? {};
+      if (f.papel === 'PAI') {
+        atual.paiId = f.genitorId;
+        atual.paiFiliacaoId = f.id;
+      } else {
+        atual.maeId = f.genitorId;
+        atual.maeFiliacaoId = f.id;
+      }
+      genitoresTemp.set(f.filhoId, atual);
+    }
+
+    for (const [filhoId, g] of genitoresTemp.entries()) {
+      const chave = `${g.paiId ?? 'x'}-${g.maeId ?? 'x'}`;
+      const filiacaoIds = [g.paiFiliacaoId, g.maeFiliacaoId].filter((id): id is number => id !== undefined);
+
+      let grupo = mapa.get(chave);
+      if (!grupo) {
+        grupo = { chave, paiId: g.paiId, maeId: g.maeId, filhos: [] };
+        mapa.set(chave, grupo);
+      }
+      grupo.filhos.push({ filhoId, filiacaoIds });
+    }
+
+    return Array.from(mapa.values());
+  }, [listaFiliacoes]);
 
   return (
     <section>
       <h2>Casais</h2>
-      <form className="form-pessoa" onSubmit={aoEnviar(() => criarUniao.mutate())}>
-        <SelectPessoa valor={pessoaA} onChange={setPessoaA} pessoas={lista} rotulo="Pessoa 1" />
-        <span className="entre">💞</span>
-        <SelectPessoa valor={pessoaB} onChange={setPessoaB} pessoas={lista} rotulo="Pessoa 2" />
+      <p style={{ margin: '0 0 12px', fontSize: '0.9rem' }}>
+        Pai ou mãe <strong>solo</strong> não precisa de casal: use o bloco “Pais e Filhos” mais abaixo.
+      </p>
+      <form className="form-pessoa" onSubmit={(e) => { e.preventDefault(); criarUniao.mutate(); }}>
+        {/* DEPOIS: */}
+      <select value={pessoaA} onChange={(e) => setPessoaA(e.target.value)} required>
+        <option value="">Selecione o Pai</option>
+        {candidatasPessoaA.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.nome} {p.sexo ? `(${p.sexo})` : ''}
+          </option>
+        ))}
+      </select>
+      <span className="entre">💞</span>
+      <select value={pessoaB} onChange={(e) => setPessoaB(e.target.value)} required>
+        <option value="">Selecione a Mãe</option>
+        {candidatasPessoaB.map((p) => (
+          <option key={p.id} value={p.id}>'
+          '
+            {p.nome} {p.sexo ? `(${p.sexo})` : ''}
+          </option>
+        ))}
+      </select>
         <button type="submit" disabled={criarUniao.isPending}>
           Unir
         </button>
       </form>
       {criarUniao.error && <p className="erro">{criarUniao.error.message}</p>}
       {excluirUniao.error && <p className="erro">{excluirUniao.error.message}</p>}
-      <table className="tabela">
+
+      <table className="tabela" style={{ marginBottom: '32px' }}>
         <tbody>
-          {(unioes.data ?? []).map((u) => (
+          {listaUnioes.map((u) => (
             <tr key={u.id}>
               <td>
                 {nome(u.pessoaAId)} 💞 {nome(u.pessoaBId)}
@@ -1452,7 +2082,7 @@ export function Familias() {
               </td>
             </tr>
           ))}
-          {unioes.data?.length === 0 && (
+          {listaUnioes.length === 0 && (
             <tr>
               <td>Nenhum casal cadastrado.</td>
             </tr>
@@ -1460,49 +2090,207 @@ export function Familias() {
         </tbody>
       </table>
 
-      <h2 style={{ marginTop: 32 }}>Pais e filhos</h2>
-      <form className="form-pessoa" onSubmit={aoEnviar(() => criarFiliacao.mutate())}>
-        <SelectPessoa valor={genitor} onChange={setGenitor} pessoas={lista} rotulo="Pai/Mãe" />
-        <select value={papel} onChange={(e) => setPapel(e.target.value as 'PAI' | 'MAE')}>
-          <option value="PAI">é o PAI de</option>
-          <option value="MAE">é a MÃE de</option>
-        </select>
-        <SelectPessoa valor={filho} onChange={setFilho} pessoas={lista} rotulo="Filho(a)" />
-        <button type="submit" disabled={criarFiliacao.isPending}>
-          Vincular
+      <h2>Pais e Filhos em Lote</h2>
+      <form
+        onSubmit={(e) => { e.preventDefault(); criarFiliacaoLote.mutate(); }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          background: '#fffaf0',
+          padding: '16px',
+          borderRadius: '4px',
+          border: '1px solid var(--marrom-claro)',
+        }}
+      >
+        <label>
+          <strong>1. Selecione o casal, ou o pai/mãe solo:</strong>
+          <select
+            value={origem}
+            onChange={(e) => {
+              const v = e.target.value;
+              setOrigem(v);
+              setFilhosSelecionadosIds([]);
+              if (v.startsWith('p:')) {
+                const sexo = mapaPessoas.get(Number(v.slice(2)))?.sexo;
+                if (sexo === 'M') setPapelSolo('PAI');
+                if (sexo === 'F') setPapelSolo('MAE');
+              }
+            }}
+            required
+            style={{ width: '100%', padding: '8px', marginTop: '4px' }}
+          >
+            <option value="">Selecione...</option>
+            <optgroup label="Casais">
+              {listaUnioes.map((u) => (
+                <option key={`u${u.id}`} value={`u:${u.id}`}>
+                  {nome(u.pessoaAId)} & {nome(u.pessoaBId)}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Pai ou mãe solo (sem casal)">
+              {pessoasSoloDisponiveis.map((p) => (
+                <option key={`p${p.id}`} value={`p:${p.id}`}>
+                  {nome(p.id)} {p.sexo ? `(${p.sexo})` : ''}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+
+        {soloAtual && (
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <strong>{nome(soloAtual.id)} é:</strong>
+            <label style={{ display: 'flex', gap: '4px', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="papel-solo"
+                checked={papelSolo === 'PAI'}
+                onChange={() => setPapelSolo('PAI')}
+              />
+              o PAI
+            </label>
+            <label style={{ display: 'flex', gap: '4px', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="papel-solo"
+                checked={papelSolo === 'MAE'}
+                onChange={() => setPapelSolo('MAE')}
+              />
+              a MÃE
+            </label>
+          </div>
+        )}
+
+        {origem && (
+          <div>
+            <p style={{ margin: '8px 0', fontSize: '0.9rem' }}>
+              <strong>2. Selecione os filhos</strong> (Regra: nascimento com pelo menos 10 anos a mais que {rotuloReferencia}: {maeAtual ? `${nome(maeAtual.id)} (${anoNascimentoMae ?? 'N/D'})` : 'N/D'}):
+            </p>
+            <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--marrom-claro)', padding: '8px', background: '#fff' }}>
+              {filhosDisponiveis.map((p) => (
+                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={filhosSelecionadosIds.includes(p.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFilhosSelecionadosIds([...filhosSelecionadosIds, p.id]);
+                      } else {
+                        setFilhosSelecionadosIds(filhosSelecionadosIds.filter((id) => id !== p.id));
+                      }
+                    }}
+                  />
+                  {p.nome} {p.dataNascimento ? `(Nasc: ${p.dataNascimento.split('-').reverse().join('/')})` : ''}
+                </label>
+              ))}
+              {filhosDisponiveis.length === 0 && <p>Nenhuma pessoa atende aos critérios disponíveis.</p>}
+            </div>
+          </div>
+        )}
+
+        <button type="submit" disabled={criarFiliacaoLote.isPending || filhosSelecionadosIds.length === 0}>
+          Vincular Filhos
         </button>
       </form>
-      {criarFiliacao.error && <p className="erro">{criarFiliacao.error.message}</p>}
+
+      {criarFiliacaoLote.error && <p className="erro">{criarFiliacaoLote.error.message}</p>}
       {excluirFiliacao.error && <p className="erro">{excluirFiliacao.error.message}</p>}
-      <table className="tabela">
-        <tbody>
-          {(filiacoes.data ?? []).map((f) => (
-            <tr key={f.id}>
-              <td>
-                {nome(f.genitorId)} — {f.papel === 'PAI' ? 'pai' : 'mãe'} de — {nome(f.filhoId)}
-              </td>
-              <td className="acoes">
+
+      <h3 style={{ marginTop: '24px' }}>Vínculos Existentes</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {gruposFamiliares.map((grupo) => {
+          const todosFiliacaoIds = grupo.filhos.flatMap((f) => f.filiacaoIds);
+
+          return (
+            <div
+              key={grupo.chave}
+              style={{
+                background: '#fffaf0',
+                border: '1px solid var(--marrom-claro)',
+                borderRadius: '6px',
+                padding: '16px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px solid var(--pergaminho-escuro)',
+                  paddingBottom: '8px',
+                  marginBottom: '12px',
+                }}
+              >
+                <strong style={{ fontSize: '1.1rem', color: 'var(--marrom)' }}>
+                  {grupo.paiId && grupo.maeId
+                    ? `${nome(grupo.paiId)} 💞 ${nome(grupo.maeId)}`
+                    : grupo.paiId
+                    ? `${nome(grupo.paiId)} (Pai solo)`
+                    : `${nome(grupo.maeId!)} (Mãe solo)`}
+                </strong>
+
                 <button
                   type="button"
                   className="perigo"
-                  onClick={() => confirm('Remover este vínculo?') && excluirFiliacao.mutate(f.id)}
+                  style={{ fontSize: '0.85rem', padding: '4px 8px' }}
+                  onClick={() =>
+                    confirm('Remover todos os filhos deste núcleo familiar?') &&
+                    excluirFiliacao.mutate(todosFiliacaoIds)
+                  }
                 >
-                  Remover
+                  Remover Núcleo
                 </button>
-              </td>
-            </tr>
-          ))}
-          {filiacoes.data?.length === 0 && (
-            <tr>
-              <td>Nenhum vínculo cadastrado.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--marrom-claro)' }}>Filhos:</span>
+                {grupo.filhos.map((f) => (
+                  <span
+                    key={f.filhoId}
+                    style={{
+                      background: 'var(--pergaminho-escuro)',
+                      padding: '4px 10px',
+                      borderRadius: '16px',
+                      fontSize: '0.9rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    ➔ {nome(f.filhoId)}
+                    <button
+                      type="button"
+                      title="Remover apenas este filho"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#8a2b2b',
+                        cursor: 'pointer',
+                        padding: '0 2px',
+                        fontWeight: 'bold',
+                        fontSize: '1rem',
+                        lineHeight: '1',
+                      }}
+                      onClick={() =>
+                        confirm(`Remover vínculo de ${nome(f.filhoId)}?`) &&
+                        excluirFiliacao.mutate(f.filiacaoIds)
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {gruposFamiliares.length === 0 && <p>Nenhum vínculo cadastrado.</p>}
+      </div>
     </section>
   );
 }
-
 
 ================================================================================
 FIM DO ARQUIVO
@@ -1925,14 +2713,14 @@ ARQUIVO: docs\ROADMAP.md
 # Roadmap
 
 1. [x] Esqueleto, configuração, nomes curtos com teste
-2. [ ] Conectar banco, rodar migração, tela Início verde
-3. [ ] CRUD de pessoas (API + tela)
-4. [ ] Uniões e filiações (API + tela Famílias)
-5. [ ] Portar `ArvoreLayout` com teste "golden" dos 40 nomes
-6. [ ] Tela Árvore em SVG (zoom, nomes curtos)
-7. [ ] Parentesco derivado
-8. [ ] Fotos (upload)
-9. [ ] Script de migração dos dados do Java
+2. [x] Conectar banco, rodar migração, tela Início verde
+3. [x] CRUD de pessoas (API + tela), com foto
+4. [x] Uniões e filiações (API + tela Famílias)
+5. [x] Portar `ArvoreLayout` (conferido contra o Java: mesmas coordenadas) + `montarFamilias`
+6. [~] Tela Árvore em SVG (gerações, casais com coração, ramos, zoom, busca, linha direta) — em teste
+7. [ ] Parentesco derivado (irmão, avô, tio, primo…) na ficha da pessoa
+8. [ ] Fotos: ampliar/recortar, excluir arquivo ao apagar pessoa
+9. [ ] Script de migração dos dados do Java (se ainda necessário)
 10. [ ] Testes de API, polimento, entrega
 
 
@@ -2080,12 +2868,672 @@ FIM DO ARQUIVO
 ================================================================================
 
 ================================================================================
+ARQUIVO: packages\domain\src\familias\montarFamilias.test.ts
+================================================================================
+
+import { describe, expect, it } from 'vitest';
+import { montarFamilias } from './montarFamilias';
+
+describe('montarFamilias', () => {
+  it('casal sem filhos aparece como família vazia', () => {
+    expect(montarFamilias([{ pessoaAId: 1, pessoaBId: 2 }], [])).toEqual([
+      { paiId: 1, maeId: 2, filhosIds: [] },
+    ]);
+  });
+
+  it('junta os filhos ao casal e acerta pai/mãe pelo papel', () => {
+    const f = montarFamilias(
+      [{ pessoaAId: 1, pessoaBId: 2 }], // 1 é a mãe, 2 é o pai
+      [
+        { filhoId: 3, genitorId: 2, papel: 'PAI' },
+        { filhoId: 3, genitorId: 1, papel: 'MAE' },
+      ],
+    );
+    expect(f).toEqual([{ paiId: 2, maeId: 1, filhosIds: [3] }]);
+  });
+
+  it('filho com um só genitor assume o único parceiro como outro genitor', () => {
+    const f = montarFamilias(
+      [{ pessoaAId: 1, pessoaBId: 2 }],
+      [{ filhoId: 3, genitorId: 1, papel: 'PAI' }],
+    );
+    expect(f).toEqual([{ paiId: 1, maeId: 2, filhosIds: [3] }]);
+  });
+
+  it('genitor sem união continua sozinho', () => {
+    const f = montarFamilias([], [{ filhoId: 3, genitorId: 1, papel: 'MAE' }]);
+    expect(f).toEqual([{ paiId: null, maeId: 1, filhosIds: [3] }]);
+  });
+
+  it('não adivinha o parceiro quando há duas uniões', () => {
+    const f = montarFamilias(
+      [
+        { pessoaAId: 1, pessoaBId: 2 },
+        { pessoaAId: 1, pessoaBId: 4 },
+      ],
+      [{ filhoId: 3, genitorId: 1, papel: 'PAI' }],
+    );
+    expect(f).toContainEqual({ paiId: 1, maeId: null, filhosIds: [3] });
+  });
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\familias\montarFamilias.ts
+================================================================================
+
+import type { Familia, Filiacao, Uniao } from '../tipos';
+
+type UniaoMin = Pick<Uniao, 'pessoaAId' | 'pessoaBId'>;
+type FiliacaoMin = Pick<Filiacao, 'filhoId' | 'genitorId' | 'papel'>;
+
+/**
+ * Transforma as ligações do banco (uniões + filiações, tudo por id) nas
+ * "famílias" que o layout da árvore entende: pai, mãe e filhos.
+ *
+ * Regras:
+ * - Todo casal cadastrado vira uma família, mesmo sem filhos.
+ * - Os filhos entram no casal formado pelos seus dois genitores.
+ * - Se um filho só tem UM genitor cadastrado e esse genitor tem exatamente
+ *   UMA união, o parceiro é considerado o outro genitor (só para desenhar).
+ * - Pessoas sem nenhuma ligação não entram (a tela as lista à parte).
+ */
+export function montarFamilias(unioes: UniaoMin[], filiacoes: FiliacaoMin[]): Familia[] {
+  // parceiros de cada pessoa
+  const parceiros = new Map<number, number[]>();
+  const addParceiro = (a: number, b: number) => {
+    const l = parceiros.get(a) ?? [];
+    if (!l.includes(b)) l.push(b);
+    parceiros.set(a, l);
+  };
+  for (const u of unioes) {
+    addParceiro(u.pessoaAId, u.pessoaBId);
+    addParceiro(u.pessoaBId, u.pessoaAId);
+  }
+
+  // pai e mãe de cada filho (na ordem em que os filhos aparecem)
+  const genitores = new Map<number, { pai: number | null; mae: number | null }>();
+  for (const f of filiacoes) {
+    const g = genitores.get(f.filhoId) ?? { pai: null, mae: null };
+    if (f.papel === 'PAI') g.pai = f.genitorId;
+    else g.mae = f.genitorId;
+    genitores.set(f.filhoId, g);
+  }
+
+  // completa o genitor que falta quando só há um parceiro possível
+  for (const g of genitores.values()) {
+    if (g.pai !== null && g.mae === null) {
+      const ps = parceiros.get(g.pai);
+      if (ps && ps.length === 1) g.mae = ps[0]!;
+    } else if (g.mae !== null && g.pai === null) {
+      const ps = parceiros.get(g.mae);
+      if (ps && ps.length === 1) g.pai = ps[0]!;
+    }
+  }
+
+  const familias = new Map<string, Familia>();
+  const chaveCasal = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
+
+  // 1) casais cadastrados (na ordem de cadastro)
+  for (const u of unioes) {
+    familias.set(chaveCasal(u.pessoaAId, u.pessoaBId), {
+      paiId: u.pessoaAId,
+      maeId: u.pessoaBId,
+      filhosIds: [],
+    });
+  }
+
+  // 2) filhos
+  for (const [filho, g] of genitores) {
+    let chave: string;
+    if (g.pai !== null && g.mae !== null) chave = chaveCasal(g.pai, g.mae);
+    else chave = `solo-${g.pai ?? g.mae}`;
+
+    let fam = familias.get(chave);
+    if (!fam) {
+      fam = { paiId: g.pai, maeId: g.mae, filhosIds: [] };
+      familias.set(chave, fam);
+    } else {
+      // garante pai/mãe corretos (o casal pode ter vindo só da união)
+      if (g.pai !== null) fam.paiId = g.pai;
+      if (g.mae !== null) fam.maeId = g.mae;
+    }
+    if (!fam.filhosIds.includes(filho)) fam.filhosIds.push(filho);
+  }
+
+  return [...familias.values()];
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
 ARQUIVO: packages\domain\src\index.ts
 ================================================================================
 
 export * from './tipos';
 export { nomesCurtos } from './pessoa/nomeCurto';
 export { ehAncestral } from './familias/ancestrais';
+export { montarFamilias } from './familias/montarFamilias';
+export {
+  ALTURA_LINHA,
+  DISTANCIA_CASAL,
+  LARGURA_NO,
+  MARGEM,
+  calcularLayout,
+} from './layout/arvoreLayout';
+export type { CasalPosicionado, ResultadoLayout } from './layout/arvoreLayout';
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\layout\arvoreLayout.test.ts
+================================================================================
+
+import { describe, expect, it } from 'vitest';
+import type { Familia } from '../tipos';
+import { ALTURA_LINHA, DISTANCIA_CASAL, LARGURA_NO, calcularLayout } from './arvoreLayout';
+
+const fam = (paiId: number | null, maeId: number | null, ...filhosIds: number[]): Familia => ({
+  paiId,
+  maeId,
+  filhosIds,
+});
+
+/** Família de teste: 4 gerações, casamentos cruzados e um genitor sozinho. */
+const FAMILIAS: Familia[] = [
+  fam(1, 2, 3, 12),
+  fam(4, 5, 6, 7, 8, 9),
+  fam(3, 6, 10, 11),
+  fam(8, 13, 14, 15),
+  fam(10, 16, 17),
+  fam(18, null, 19),
+];
+
+/**
+ * Valores "golden": gerados pelo ArvoreLayout.java original (aprovado na
+ * versão JavaFX) para a mesma família. Se o TS divergir, o port está errado.
+ */
+const ESPERADO: Record<number, [x: number, linha: number]> = {
+  1: [128.86363636363632, 0],
+  2: [338.8636363636363, 0],
+  4: [643.8636363636363, 0],
+  5: [853.8636363636363, 0],
+  3: [287.15909090909076, 1],
+  6: [497.15909090909076, 1],
+  8: [697.1590909090908, 1],
+  13: [907.1590909090908, 1],
+  10: [320.0, 2],
+  16: [110.0, 2],
+  18: [1103.8636363636363, 0],
+  12: [187.15909090909076, 1],
+  7: [597.1590909090908, 1],
+  9: [1007.1590909090908, 1],
+  11: [420.0, 2],
+  14: [748.8636363636363, 2],
+  15: [848.8636363636363, 2],
+  17: [211.70454545454552, 3],
+  19: [1107.1590909090908, 1],
+};
+
+describe('calcularLayout', () => {
+  const r = calcularLayout(FAMILIAS);
+
+  it('reproduz exatamente o resultado do Java', () => {
+    expect(r.totalLinhas).toBe(4);
+    expect(r.largura).toBeCloseTo(1217.1590909090908, 6);
+    for (const [id, [x, linha]] of Object.entries(ESPERADO)) {
+      expect(r.x.get(Number(id)), `x de ${id}`).toBeCloseTo(x, 6);
+      expect(r.linha.get(Number(id)), `linha de ${id}`).toBe(linha);
+    }
+    expect(r.x.size).toBe(Object.keys(ESPERADO).length);
+  });
+
+  it('todos os filhos de um casal ficam na mesma linha, logo abaixo dos pais', () => {
+    for (const c of r.casais) {
+      for (const f of c.filhosIds) expect(r.linha.get(f)).toBe(c.linha + 1);
+    }
+  });
+
+  it('cônjuges ficam à distância do casal e na mesma linha', () => {
+    for (const c of r.casais) {
+      if (c.direitaId === null) continue;
+      expect(r.linha.get(c.esquerdaId)).toBe(r.linha.get(c.direitaId));
+      expect(r.x.get(c.direitaId)! - r.x.get(c.esquerdaId)!).toBeCloseTo(DISTANCIA_CASAL, 6);
+      expect(c.centroX).toBeCloseTo((r.x.get(c.esquerdaId)! + r.x.get(c.direitaId)!) / 2, 6);
+    }
+  });
+
+  it('ninguém se sobrepõe na mesma linha', () => {
+    const porLinha = new Map<number, number[]>();
+    for (const [id, linha] of r.linha) {
+      porLinha.set(linha, [...(porLinha.get(linha) ?? []), r.x.get(id)!]);
+    }
+    for (const xs of porLinha.values()) {
+      xs.sort((a, b) => a - b);
+      for (let i = 1; i < xs.length; i++) expect(xs[i]! - xs[i - 1]!).toBeGreaterThanOrEqual(LARGURA_NO - 1e-6);
+    }
+  });
+
+  it('registra os pais de cada filho', () => {
+    expect(r.pais.get(17)).toEqual([10, 16]);
+    expect(r.pais.get(19)).toEqual([18]);
+    expect(r.pais.has(1)).toBe(false);
+  });
+
+  it('usa a constante de altura de linha', () => {
+    expect(ALTURA_LINHA).toBe(200);
+  });
+
+  it('avisa e ignora quando uma pessoa aparece em dois casais', () => {
+    const conflito = calcularLayout([fam(1, 2, 3), fam(1, 4, 5)]);
+    expect(conflito.avisos).toHaveLength(1);
+  });
+
+  it('casal sem filhos é desenhado', () => {
+    const solo = calcularLayout([fam(1, 2)]);
+    expect(solo.casais).toHaveLength(1);
+    expect(solo.totalLinhas).toBe(1);
+  });
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: packages\domain\src\layout\arvoreLayout.ts
+================================================================================
+
+import type { Familia } from '../tipos';
+
+/**
+ * Calcula a posição de cada pessoa numa árvore genealógica desenhada em
+ * linhas (gerações). Não depende de tela nem de banco: recebe famílias
+ * (pai, mãe, filhos) e devolve coordenadas.
+ *
+ * Ideia: cada casal vira uma "unidade". As unidades são distribuídas em
+ * linhas (geração) e depois ajustadas várias vezes para que o casal fique
+ * centralizado sobre os filhos e os filhos sob os pais.
+ */
+
+/** Largura reservada para cada pessoa (foto + nome). */
+export const LARGURA_NO = 100;
+/** Distância entre os dois cônjuges (centro a centro). */
+export const DISTANCIA_CASAL = 210;
+/** Altura de cada linha de geração. */
+export const ALTURA_LINHA = 200;
+export const MARGEM = 60;
+
+/** Casal (ou pessoa sozinha) já posicionado, com os filhos que saem dele. */
+export interface CasalPosicionado {
+  esquerdaId: number;
+  /** null se for uma pessoa sozinha */
+  direitaId: number | null;
+  filhosIds: number[];
+  linha: number;
+  /** posição do coração (ou da pessoa sozinha) */
+  centroX: number;
+}
+
+export interface ResultadoLayout {
+  x: Map<number, number>;
+  linha: Map<number, number>;
+  /** ids dos pais de cada pessoa que tem pais na árvore */
+  pais: Map<number, number[]>;
+  casais: CasalPosicionado[];
+  totalLinhas: number;
+  largura: number;
+  /** problemas encontrados nos dados (ex.: pessoa em dois casais) */
+  avisos: string[];
+}
+
+class Unidade {
+  membros: number[] = [];
+  filhos: number[] = [];
+  linha = 0;
+  cx = 0;
+  emitida = false;
+  /** true = o segundo membro fica à esquerda */
+  trocada = false;
+
+  get casal(): boolean {
+    return this.membros.length === 2;
+  }
+  get esquerda(): number {
+    return this.casal && this.trocada ? this.membros[1]! : this.membros[0]!;
+  }
+  get direita(): number | null {
+    return this.casal ? (this.trocada ? this.membros[0]! : this.membros[1]!) : null;
+  }
+  get largura(): number {
+    return this.casal ? DISTANCIA_CASAL + LARGURA_NO : LARGURA_NO;
+  }
+  xDe(pessoa: number): number {
+    if (!this.casal) return this.cx;
+    return pessoa === this.esquerda ? this.cx - DISTANCIA_CASAL / 2 : this.cx + DISTANCIA_CASAL / 2;
+  }
+}
+
+export function calcularLayout(familias: Familia[]): ResultadoLayout {
+  const avisos: string[] = [];
+  const unidadeDe = new Map<number, Unidade>();
+  const unidades: Unidade[] = [];
+
+  // 1) casais (uma unidade por casal) ------------------------------------
+  for (const f of familias) {
+    const pais: number[] = [];
+    if (f.paiId !== null) pais.push(f.paiId);
+    if (f.maeId !== null && f.maeId !== f.paiId) pais.push(f.maeId);
+    if (pais.length === 0) continue;
+
+    let existente: Unidade | null = null;
+    let conflito = false;
+    for (const p of pais) {
+      const u = unidadeDe.get(p);
+      if (u) {
+        if (existente === null) existente = u;
+        else if (existente !== u) conflito = true;
+      }
+    }
+
+    if (existente) {
+      const mesmoCasal =
+        !conflito &&
+        pais.every((p) => existente!.membros.includes(p)) &&
+        existente.membros.every((m) => pais.includes(m));
+      if (mesmoCasal) {
+        for (const c of f.filhosIds) if (!existente.filhos.includes(c)) existente.filhos.push(c);
+      } else {
+        avisos.push(`Família ignorada: uma das pessoas já aparece em outro casal (${pais.join(' e ')})`);
+      }
+      continue;
+    }
+
+    const u = new Unidade();
+    u.membros.push(...pais);
+    for (const c of f.filhosIds) if (!u.filhos.includes(c)) u.filhos.push(c);
+    unidades.push(u);
+    for (const p of pais) unidadeDe.set(p, u);
+  }
+
+  // 2) pessoas soltas (só aparecem como filhos) --------------------------
+  const todas = new Set<number>();
+  for (const f of familias) {
+    if (f.paiId !== null) todas.add(f.paiId);
+    if (f.maeId !== null) todas.add(f.maeId);
+    for (const c of f.filhosIds) todas.add(c);
+  }
+  for (const p of todas) {
+    if (!unidadeDe.has(p)) {
+      const u = new Unidade();
+      u.membros.push(p);
+      unidades.push(u);
+      unidadeDe.set(p, u);
+    }
+  }
+
+  // 3) de quais pais cada pessoa é filha ---------------------------------
+  const paisDe = new Map<number, Unidade>();
+  for (const u of unidades) {
+    for (const c of u.filhos) {
+      if (unidadeDe.get(c) === u || paisDe.has(c)) continue;
+      paisDe.set(c, u);
+    }
+  }
+  for (const u of unidades) u.filhos = u.filhos.filter((c) => paisDe.get(c) === u);
+
+  // 4) linhas (gerações) -------------------------------------------------
+  const limite = unidades.length * 4 + 10;
+  let mudou: boolean;
+  let voltas = 0;
+  do {
+    mudou = false;
+    for (const u of unidades) {
+      if (u.filhos.length === 0) continue;
+      // todos os filhos de um casal ficam na mesma linha, logo abaixo dos pais
+      let alvo = u.linha + 1;
+      for (const c of u.filhos) alvo = Math.max(alvo, unidadeDe.get(c)!.linha);
+      for (const c of u.filhos) {
+        const cu = unidadeDe.get(c)!;
+        if (cu.linha !== alvo) {
+          cu.linha = alvo;
+          mudou = true;
+        }
+      }
+    }
+  } while (mudou && voltas++ < limite);
+
+  // quem não tem pais desce até ficar logo acima dos filhos
+  voltas = 0;
+  do {
+    mudou = false;
+    for (const u of unidades) {
+      if (!ehRaiz(u, paisDe) || u.filhos.length === 0) continue;
+      let min = Number.MAX_SAFE_INTEGER;
+      for (const c of u.filhos) min = Math.min(min, unidadeDe.get(c)!.linha);
+      if (min - 1 > u.linha) {
+        u.linha = min - 1;
+        mudou = true;
+      }
+    }
+  } while (mudou && voltas++ < limite);
+
+  let totalLinhas = 0;
+  for (const u of unidades) totalLinhas = Math.max(totalLinhas, u.linha + 1);
+
+  // 5) ordem dentro de cada linha (busca em profundidade) ----------------
+  const linhas: Unidade[][] = Array.from({ length: totalLinhas }, () => []);
+
+  const raizes = unidades.filter((u) => ehRaiz(u, paisDe));
+  raizes.sort((a, b) => a.linha - b.linha); // estável: mantém a ordem de cadastro
+
+  for (const r of raizes) visitar(r, linhas, unidadeDe, paisDe);
+  for (const u of unidades) visitar(u, linhas, unidadeDe, paisDe);
+
+  // posição inicial: lado a lado
+  for (const linha of linhas) {
+    let x = 0;
+    let anterior: Unidade | null = null;
+    for (const u of linha) {
+      if (anterior) x += (anterior.largura + u.largura) / 2;
+      u.cx = x;
+      anterior = u;
+    }
+  }
+
+  // 6) ajuste: centraliza casais sobre filhos e filhos sob pais ----------
+  const indice = new Map<Unidade, number>();
+  unidades.forEach((u, i) => indice.set(u, i));
+
+  for (let volta = 0; volta < 120; volta++) {
+    for (const u of unidades) orientar(u, paisDe);
+
+    const desejado = unidades.map((u) => centroDesejado(u, unidadeDe, paisDe));
+
+    for (const linha of linhas) {
+      if (linha.length === 0) continue;
+      const alvo = linha.map((u) => desejado[indice.get(u)!]!);
+      const posicoes = distribuir(linha, alvo);
+      linha.forEach((u, i) => {
+        u.cx += 0.5 * (posicoes[i]! - u.cx);
+      });
+    }
+  }
+  // última passada sem suavização: garante o espaçamento mínimo
+  for (const linha of linhas) {
+    if (linha.length === 0) continue;
+    const p = distribuir(
+      linha,
+      linha.map((u) => u.cx),
+    );
+    linha.forEach((u, i) => {
+      u.cx = p[i]!;
+    });
+  }
+
+  // 7) normaliza (margem esquerda) e monta o resultado -------------------
+  let minEsq = Number.MAX_VALUE;
+  let maxDir = -Number.MAX_VALUE;
+  for (const u of unidades) {
+    minEsq = Math.min(minEsq, u.cx - u.largura / 2);
+    maxDir = Math.max(maxDir, u.cx + u.largura / 2);
+  }
+  const deslocamento = MARGEM - minEsq;
+
+  const r: ResultadoLayout = {
+    x: new Map(),
+    linha: new Map(),
+    pais: new Map(),
+    casais: [],
+    totalLinhas,
+    largura: maxDir - minEsq + 2 * MARGEM,
+    avisos,
+  };
+
+  for (const u of unidades) {
+    u.cx += deslocamento;
+    for (const m of u.membros) {
+      r.x.set(m, u.xDe(m));
+      r.linha.set(m, u.linha);
+    }
+    if (u.casal || u.filhos.length > 0) {
+      r.casais.push({
+        esquerdaId: u.esquerda,
+        direitaId: u.direita,
+        filhosIds: [...u.filhos],
+        linha: u.linha,
+        centroX: u.cx,
+      });
+    }
+  }
+  for (const [filho, u] of paisDe) r.pais.set(filho, [...u.membros]);
+  return r;
+}
+
+// ---------------------------------------------------------------------------
+// AUXILIARES
+// ---------------------------------------------------------------------------
+
+function ehRaiz(u: Unidade, paisDe: Map<number, Unidade>): boolean {
+  return !u.membros.some((m) => paisDe.has(m));
+}
+
+function visitar(
+  u: Unidade,
+  linhas: Unidade[][],
+  unidadeDe: Map<number, Unidade>,
+  paisDe: Map<number, Unidade>,
+): void {
+  if (u.emitida) return;
+  u.emitida = true;
+  linhas[u.linha]!.push(u);
+
+  // filhos já colocados primeiro, depois os comuns, e por último os que
+  // ainda têm outra família (cônjuge) a ser desenhada mais à direita
+  const prioridade = (c: number): number => {
+    const cu = unidadeDe.get(c)!;
+    if (cu.emitida) return 0;
+    for (const m of cu.membros) {
+      const outro = paisDe.get(m);
+      if (outro && outro !== u && !outro.emitida) return 2;
+    }
+    return 1;
+  };
+  const chaves = new Map(u.filhos.map((c) => [c, prioridade(c)]));
+  const filhos = [...u.filhos].sort((a, b) => chaves.get(a)! - chaves.get(b)!);
+  for (const c of filhos) visitar(unidadeDe.get(c)!, linhas, unidadeDe, paisDe);
+}
+
+/** Escolhe qual cônjuge fica à esquerda: o que tem os pais mais à esquerda. */
+function orientar(u: Unidade, paisDe: Map<number, Unidade>): void {
+  if (!u.casal) return;
+  const pa = paisDe.get(u.membros[0]!);
+  const pb = paisDe.get(u.membros[1]!);
+  let trocar: boolean | null = null;
+  if (pa && pb) {
+    if (Math.abs(pa.cx - pb.cx) > 20) trocar = pb.cx < pa.cx;
+  } else if (pa) {
+    if (Math.abs(pa.cx - u.cx) > 20) trocar = pa.cx > u.cx;
+  } else if (pb) {
+    if (Math.abs(pb.cx - u.cx) > 20) trocar = pb.cx < u.cx;
+  }
+  if (trocar !== null) u.trocada = trocar;
+}
+
+function centroDesejado(
+  u: Unidade,
+  unidadeDe: Map<number, Unidade>,
+  paisDe: Map<number, Unidade>,
+): number {
+  let soma = 0;
+  let n = 0;
+
+  for (const m of u.membros) {
+    const pu = paisDe.get(m);
+    if (pu) {
+      soma += pu.cx - (u.xDe(m) - u.cx);
+      n++;
+    }
+  }
+  if (u.filhos.length > 0) {
+    let min = Number.MAX_VALUE;
+    let max = -Number.MAX_VALUE;
+    for (const c of u.filhos) {
+      const xc = unidadeDe.get(c)!.xDe(c);
+      min = Math.min(min, xc);
+      max = Math.max(max, xc);
+    }
+    soma += (min + max) / 2;
+    n++;
+  }
+  return n === 0 ? u.cx : soma / n;
+}
+
+/**
+ * Mantém a ordem da linha, respeita a distância mínima entre unidades
+ * vizinhas e chega o mais perto possível das posições desejadas
+ * (regressão isotônica / "pool adjacent violators").
+ */
+function distribuir(linha: Unidade[], alvo: number[]): number[] {
+  const n = linha.length;
+  const deslocamento = new Array<number>(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    deslocamento[i] = deslocamento[i - 1]! + (linha[i - 1]!.largura + linha[i]!.largura) / 2;
+  }
+
+  const soma = new Array<number>(n).fill(0);
+  const qtd = new Array<number>(n).fill(0);
+  let blocos = 0;
+  for (let i = 0; i < n; i++) {
+    soma[blocos] = alvo[i]! - deslocamento[i]!;
+    qtd[blocos] = 1;
+    blocos++;
+    while (blocos > 1 && soma[blocos - 2]! / qtd[blocos - 2]! > soma[blocos - 1]! / qtd[blocos - 1]!) {
+      soma[blocos - 2]! += soma[blocos - 1]!;
+      qtd[blocos - 2]! += qtd[blocos - 1]!;
+      blocos--;
+    }
+  }
+
+  const resultado = new Array<number>(n).fill(0);
+  let i = 0;
+  for (let b = 0; b < blocos; b++) {
+    const media = soma[b]! / qtd[b]!;
+    for (let k = 0; k < qtd[b]!; k++, i++) resultado[i] = media + deslocamento[i]!;
+  }
+  return resultado;
+}
 
 
 ================================================================================

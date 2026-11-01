@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../../db/client.js';
 import { pessoasRepository } from '../pessoas/pessoas.repository.js';
-import { criarFiliacaoSchema, criarUniaoSchema, idParamSchema } from './familias.schema.js';
+import { criarFiliacaoLoteSchema, criarUniaoSchema, idParamSchema } from './familias.schema.js';
 import { familiasRepository } from './familias.repository.js';
 import { familiasService } from './familias.service.js';
 
@@ -19,7 +19,7 @@ export function familiasRoutes(db: Db) {
 
     app.get('/filiacoes', async () => service.listarFiliacoes());
     app.post('/filiacoes', async (req, reply) =>
-      reply.status(201).send(await service.criarFiliacao(criarFiliacaoSchema.parse(req.body))),
+      reply.status(201).send(await service.criarFiliacaoLote(criarFiliacaoLoteSchema.parse(req.body))),
     );
     app.delete('/filiacoes/:id', async (req, reply) => {
       await service.excluirFiliacao(idParamSchema.parse(req.params).id);
