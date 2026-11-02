@@ -48,6 +48,9 @@ export function Arvore() {
   const [busca, setBusca] = useState('');
   const [focoEscolhido, setFocoEscolhido] = useState<number | null | undefined>(undefined);
   const [zoom, setZoom] = useState(1);
+  const [geracoesVisiveis, setGeracoesVisiveis] = useState(0);
+  const [estadoAnimacao, setEstadoAnimacao] = useState<'parada' | 'executando' | 'pausada' | 'concluida'>('parada');
+  const [intervaloAnimacao, setIntervaloAnimacao] = useState(1100);
   const areaRef = useRef<HTMLDivElement>(null);
   const ajusteInicialFeito = useRef(false);
 
@@ -61,6 +64,27 @@ export function Arvore() {
     const semLigacao = pessoas.data.filter((p) => !layout.x.has(p.id));
     return { layout, porId, curtos, semLigacao };
   }, [pessoas.data, unioes.data, filiacoes.data]);
+
+  const totalGeracoes = dados?.layout.totalLinhas ?? 0;
+
+  useEffect(() => {
+    setGeracoesVisiveis(0);
+    setEstadoAnimacao('parada');
+  }, [totalGeracoes]);
+
+  useEffect(() => {
+    if (estadoAnimacao !== 'executando') return;
+    const temporizador = window.setInterval(() => {
+      setGeracoesVisiveis((visiveis) => Math.min(visiveis + 1, totalGeracoes));
+    }, intervaloAnimacao);
+    return () => window.clearInterval(temporizador);
+  }, [estadoAnimacao, intervaloAnimacao, totalGeracoes]);
+
+  useEffect(() => {
+    if (estadoAnimacao === 'executando' && totalGeracoes > 0 && geracoesVisiveis >= totalGeracoes) {
+      setEstadoAnimacao('concluida');
+    }
+  }, [estadoAnimacao, geracoesVisiveis, totalGeracoes]);
 
   // pessoa em foco: por padrão, a primeira da última geração
   const focoPadrao = useMemo(() => {
@@ -137,8 +161,48 @@ export function Arvore() {
   const combina = (id: number) =>
     filtro === '' || semAcento(porId.get(id)?.nome ?? '').includes(filtro);
 
+  const iniciarAnimacao = () => {
+    if (geracoesVisiveis >= totalGeracoes) setGeracoesVisiveis(0);
+    setGeracoesVisiveis((visiveis) => (visiveis === 0 ? 1 : visiveis));
+    setEstadoAnimacao(totalGeracoes <= 1 ? 'concluida' : 'executando');
+  };
+
+  const reiniciarAnimacao = () => {
+    setGeracoesVisiveis(0);
+    setEstadoAnimacao('parada');
+  };
+
   const barra = (
     <div className="arvore-barra">
+      <div className="arvore-barra-grupo arvore-controles">
+        {estadoAnimacao === 'parada' || estadoAnimacao === 'concluida' ? (
+          <button type="button" onClick={iniciarAnimacao}>
+            {estadoAnimacao === 'concluida' ? '▶ Reproduzir novamente' : '▶ Iniciar árvore'}
+          </button>
+        ) : estadoAnimacao === 'executando' ? (
+          <button type="button" onClick={() => setEstadoAnimacao('pausada')}>Ⅱ Pausar</button>
+        ) : (
+          <button type="button" onClick={() => setEstadoAnimacao('executando')}>▶ Continuar</button>
+        )}
+        <button type="button" className="secundario" onClick={reiniciarAnimacao}
+          disabled={geracoesVisiveis === 0}>
+          ↺ Reiniciar
+        </button>
+        <label className="arvore-velocidade">
+          Velocidade
+          <select value={intervaloAnimacao}
+            onChange={(e) => setIntervaloAnimacao(Number(e.target.value))}>
+            <option value={1800}>Lenta</option>
+            <option value={1100}>Normal</option>
+            <option value={650}>Rápida</option>
+          </select>
+        </label>
+        <span className="arvore-progresso" aria-live="polite">
+          {geracoesVisiveis} de {totalGeracoes} gerações
+          {estadoAnimacao === 'pausada' ? ' · pausada' : ''}
+          {estadoAnimacao === 'concluida' ? ' · concluída' : ''}
+        </span>
+      </div>
       <div className="arvore-barra-grupo">
         <button type="button" className="secundario" onClick={() => setZoom((z) => limitar(z / 1.15))}>
           −
@@ -205,7 +269,7 @@ export function Arvore() {
           height={altura * zoom}
           viewBox={`0 0 ${largura} ${altura}`}
           role="img"
-          aria-label="Árvore genealógica"
+          aria-label={`Árvore genealógica: ${geracoesVisiveis} de ${totalGeracoes} gerações exibidas`}
         >
           <defs>
             <radialGradient id="fundo-radial" cx="50%" cy="40%" r="75%">
@@ -248,7 +312,7 @@ export function Arvore() {
             let origemY: number;
             const partes: ReactNode[] = [];
 
-            if (c.direitaId !== null) {
+            if (c.direitaId !== null && c.linha < geracoesVisiveis) {
               const xe = layout.x.get(c.esquerdaId)! + MARGEM_ROTULOS;
               const xd = layout.x.get(c.direitaId)! + MARGEM_ROTULOS;
               partes.push(
@@ -268,6 +332,7 @@ export function Arvore() {
             }
 
             c.filhosIds.forEach((filho) => {
+              if ((layout.linha.get(filho) ?? Infinity) >= geracoesVisiveis) return;
               const fx = layout.x.get(filho)! + MARGEM_ROTULOS;
               const fy = topoDaLinha(layout.linha.get(filho)!) - 1;
               const m = (fy - origemY) * 0.55;
@@ -287,7 +352,7 @@ export function Arvore() {
 
           {/* corações */}
           {layout.casais
-            .filter((c) => c.direitaId !== null)
+            .filter((c) => c.direitaId !== null && c.linha < geracoesVisiveis)
             .map((c, i) => {
               const cx = c.centroX + MARGEM_ROTULOS;
               const cy = topoDaLinha(c.linha) + RAIO_ANEL;
@@ -313,7 +378,9 @@ export function Arvore() {
             const p = porId.get(id);
             if (!p) return null;
             const cx = x + MARGEM_ROTULOS;
-            const topo = topoDaLinha(layout.linha.get(id)!);
+            const linhaPessoa = layout.linha.get(id)!;
+            if (linhaPessoa >= geracoesVisiveis) return null;
+            const topo = topoDaLinha(linhaPessoa);
             const cy = topo + RAIO_ANEL;
             const destaque = linhaDireta.has(id);
             const nome = curtos.get(id) ?? p.nome;
@@ -362,6 +429,7 @@ export function Arvore() {
 
           {/* rótulos das gerações */}
           {Array.from({ length: layout.totalLinhas }, (_, i) => {
+            if (i >= geracoesVisiveis) return null;
             const titulo =
               layout.totalLinhas === 5 ? TITULOS_5[i]! : `${ROMANOS[i + 1] ?? i + 1} Geração`;
             const linhas = titulo.split('\n');

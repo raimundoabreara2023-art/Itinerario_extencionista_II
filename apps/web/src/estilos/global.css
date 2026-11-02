@@ -61,7 +61,7 @@ button {
   padding: 8px 14px; border: 0; border-radius: 4px; cursor: pointer;
   background: var(--destaque); color: #fff; font: inherit;
 }
-button:disabled { opacity: 0.6; cursor: wait; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
 button.secundario { background: var(--marrom-claro); }
 button.perigo { background: #8a2b2b; }
 .tabela { width: 100%; border-collapse: collapse; background: #fffaf0; }
@@ -110,3 +110,47 @@ button.secundario, label.botao.secundario { color: #fff; }
 }
 .arvore-nome.destaque { font-weight: bold; color: #7a4d10; border-color: #b8892f; }
 .arvore-sem-ligacao { margin-top: 12px; font-size: 0.9rem; }
+
+
+/* controles da apresentação progressiva da árvore */
+.arvore-controles {
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid #dfcfb1;
+  border-radius: 10px;
+  background: rgba(255, 250, 240, 0.82);
+}
+
+.arvore-velocidade {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--marrom);
+  font-size: 0.9rem;
+}
+
+.arvore-velocidade select {
+  padding: 6px 9px;
+  border: 1px solid #dfd1bd;
+  border-radius: 16px;
+  background: #fffefa;
+  color: var(--marrom);
+  font: inherit;
+}
+
+.arvore-progresso {
+  min-width: 132px;
+  color: var(--marrom-claro);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .arvore-controles {
+    width: 100%;
+  }
+
+  .arvore-progresso {
+    text-align: left;
+  }
+}
