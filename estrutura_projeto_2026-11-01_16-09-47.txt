@@ -2,6 +2,9 @@
 
 [DIR] raizes_memorias_ts
   .editorconfig
+  [DIR] .github
+    [DIR] workflows
+      ci.yml
   .gitignore
   .nvmrc
   .prettierignore
@@ -105,6 +108,40 @@
 
 
 ==================== CODIGO ====================
+
+================================================================================
+ARQUIVO: .github\workflows\ci.yml
+================================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [develop, main, 'feature/**']
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  build-e-testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
 
 ================================================================================
 ARQUIVO: .prettierrc.json
@@ -1966,8 +2003,8 @@ export function Familias() {
 
   const maeAtual = uniaoAtual
     ? [mapaPessoas.get(uniaoAtual.pessoaAId), mapaPessoas.get(uniaoAtual.pessoaBId)].find(
-        (p) => p?.sexo === 'F',
-      ) ?? mapaPessoas.get(uniaoAtual.pessoaBId)
+      (p) => p?.sexo === 'F',
+    ) ?? mapaPessoas.get(uniaoAtual.pessoaBId)
     : soloAtual;
 
   const rotuloReferencia = uniaoAtual ? 'a mãe' : 'o pai/mãe';
@@ -2038,25 +2075,24 @@ export function Familias() {
         Pai ou mãe <strong>solo</strong> não precisa de casal: use o bloco “Pais e Filhos” mais abaixo.
       </p>
       <form className="form-pessoa" onSubmit={(e) => { e.preventDefault(); criarUniao.mutate(); }}>
-        {/* DEPOIS: */}
-      <select value={pessoaA} onChange={(e) => setPessoaA(e.target.value)} required>
-        <option value="">Selecione o Pai</option>
-        {candidatasPessoaA.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.nome} {p.sexo ? `(${p.sexo})` : ''}
-          </option>
-        ))}
-      </select>
-      <span className="entre">💞</span>
-      <select value={pessoaB} onChange={(e) => setPessoaB(e.target.value)} required>
-        <option value="">Selecione a Mãe</option>
-        {candidatasPessoaB.map((p) => (
-          <option key={p.id} value={p.id}>'
-          '
-            {p.nome} {p.sexo ? `(${p.sexo})` : ''}
-          </option>
-        ))}
-      </select>
+
+        <select value={pessoaA} onChange={(e) => setPessoaA(e.target.value)} required>
+          <option value="">Selecione o Pai</option>
+          {candidatasPessoaA.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nome} {p.sexo ? `(${p.sexo})` : ''}
+            </option>
+          ))}
+        </select>
+        <span className="entre">💞</span>
+        <select value={pessoaB} onChange={(e) => setPessoaB(e.target.value)} required>
+          <option value="">Selecione a Mãe</option>
+          {candidatasPessoaB.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nome} {p.sexo ? `(${p.sexo})` : ''}
+            </option>
+          ))}
+        </select>
         <button type="submit" disabled={criarUniao.isPending}>
           Unir
         </button>
@@ -2226,8 +2262,8 @@ export function Familias() {
                   {grupo.paiId && grupo.maeId
                     ? `${nome(grupo.paiId)} 💞 ${nome(grupo.maeId)}`
                     : grupo.paiId
-                    ? `${nome(grupo.paiId)} (Pai solo)`
-                    : `${nome(grupo.maeId!)} (Mãe solo)`}
+                      ? `${nome(grupo.paiId)} (Pai solo)`
+                      : `${nome(grupo.maeId!)} (Mãe solo)`}
                 </strong>
 
                 <button
