@@ -1,7 +1,7 @@
 export class ErroNegocio extends Error {
   constructor(
     mensagem: string,
-    public readonly status: 404 | 409 | 422 = 422,
+    public readonly status: 401 | 403 | 404 | 409 | 422 = 422,
   ) {
     super(mensagem);
   }

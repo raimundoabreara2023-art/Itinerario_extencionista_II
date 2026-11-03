@@ -8,6 +8,13 @@
       "when": 1791998656459,
       "tag": "0000_brief_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793708465795,
+      "tag": "0001_loose_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

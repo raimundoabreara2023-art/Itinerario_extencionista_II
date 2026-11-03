@@ -1,0 +1,51 @@
+/* Login e troca de senha (usa as variáveis de cor do global.css) */
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-cartao {
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px;
+  background: #fffaf0;
+  border: 1px solid var(--marrom-claro);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(80, 50, 20, 0.15);
+}
+.login-cartao.solto {
+  box-shadow: none;
+  margin: 0 auto;
+}
+.login-cartao h1,
+.login-cartao h2 {
+  margin: 0;
+}
+.login-cartao p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.login-cartao label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+.login-cartao input {
+  padding: 8px;
+  border: 1px solid var(--marrom-claro);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--marrom);
+  font: inherit;
+}
+.topo nav {
+  align-items: center;
+}
+.usuario-topo {
+  font-size: 0.9rem;
+  font-style: italic;
+}

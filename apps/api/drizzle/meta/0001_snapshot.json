@@ -1,0 +1,369 @@
+{
+  "id": "fc3a7b94-ac7a-445a-ae3b-4cdcbda7967b",
+  "prevId": "f0ba1629-6236-47d6-acf4-429a02da6615",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.filiacao": {
+      "name": "filiacao",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "filiacao_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "filho_id": {
+          "name": "filho_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "genitor_id": {
+          "name": "genitor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "papel": {
+          "name": "papel",
+          "type": "papel_filiacao",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "filiacao_filho_id_pessoa_id_fk": {
+          "name": "filiacao_filho_id_pessoa_id_fk",
+          "tableFrom": "filiacao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "filho_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "filiacao_genitor_id_pessoa_id_fk": {
+          "name": "filiacao_genitor_id_pessoa_id_fk",
+          "tableFrom": "filiacao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "genitor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "filiacao_filho_papel": {
+          "name": "filiacao_filho_papel",
+          "nullsNotDistinct": false,
+          "columns": [
+            "filho_id",
+            "papel"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "filiacao_distintos": {
+          "name": "filiacao_distintos",
+          "value": "\"filiacao\".\"filho_id\" <> \"filiacao\".\"genitor_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.pessoa": {
+      "name": "pessoa",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "pessoa_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "nome": {
+          "name": "nome",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_nascimento": {
+          "name": "data_nascimento",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sexo": {
+          "name": "sexo",
+          "type": "varchar(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "foto": {
+          "name": "foto",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.uniao": {
+      "name": "uniao",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "uniao_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "pessoa_a_id": {
+          "name": "pessoa_a_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pessoa_b_id": {
+          "name": "pessoa_b_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "uniao_pessoa_a_id_pessoa_id_fk": {
+          "name": "uniao_pessoa_a_id_pessoa_id_fk",
+          "tableFrom": "uniao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_a_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "uniao_pessoa_b_id_pessoa_id_fk": {
+          "name": "uniao_pessoa_b_id_pessoa_id_fk",
+          "tableFrom": "uniao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_b_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uniao_par": {
+          "name": "uniao_par",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pessoa_a_id",
+            "pessoa_b_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "uniao_ordem": {
+          "name": "uniao_ordem",
+          "value": "\"uniao\".\"pessoa_a_id\" < \"uniao\".\"pessoa_b_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.usuario": {
+      "name": "usuario",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "usuario_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "pessoa_id": {
+          "name": "pessoa_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "login": {
+          "name": "login",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "senha_hash": {
+          "name": "senha_hash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "papel": {
+          "name": "papel",
+          "type": "papel_usuario",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MEMBRO'"
+        },
+        "trocar_senha": {
+          "name": "trocar_senha",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "usuario_pessoa_id_pessoa_id_fk": {
+          "name": "usuario_pessoa_id_pessoa_id_fk",
+          "tableFrom": "usuario",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "usuario_pessoa_id_unique": {
+          "name": "usuario_pessoa_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pessoa_id"
+          ]
+        },
+        "usuario_login_unique": {
+          "name": "usuario_login_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "login"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.papel_filiacao": {
+      "name": "papel_filiacao",
+      "schema": "public",
+      "values": [
+        "PAI",
+        "MAE"
+      ]
+    },
+    "public.papel_usuario": {
+      "name": "papel_usuario",
+      "schema": "public",
+      "values": [
+        "ADMIN",
+        "MEMBRO"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

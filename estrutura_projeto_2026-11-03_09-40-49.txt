@@ -14,9 +14,11 @@
       [DIR] drizzle
         .gitkeep
         0000_brief_warhawk.sql
+        0001_loose_shinko_yamashiro.sql
         [DIR] meta
           _journal.json
           0000_snapshot.json
+          0001_snapshot.json
       drizzle.config.ts
       package.json
       [DIR] src
@@ -29,6 +31,10 @@
         [DIR] modules
           [DIR] arvore
             .gitkeep
+          [DIR] auth
+            auth.repository.ts
+            auth.routes.ts
+            auth.schema.ts
           [DIR] familias
             .gitkeep
             familias.repository.ts
@@ -45,7 +51,10 @@
             pessoas.service.ts
         server.ts
         [DIR] shared
+          autenticacao.ts
           erros.ts
+          senha.test.ts
+          senha.ts
       tsconfig.json
     [DIR] web
       index.html
@@ -195,6 +204,29 @@ FIM DO ARQUIVO
 ================================================================================
 
 ================================================================================
+ARQUIVO: apps\api\drizzle\0001_loose_shinko_yamashiro.sql
+================================================================================
+
+CREATE TYPE "public"."papel_usuario" AS ENUM('ADMIN', 'MEMBRO');--> statement-breakpoint
+CREATE TABLE "usuario" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "usuario_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"pessoa_id" integer NOT NULL,
+	"login" varchar(80) NOT NULL,
+	"senha_hash" varchar(255) NOT NULL,
+	"papel" "papel_usuario" DEFAULT 'MEMBRO' NOT NULL,
+	"trocar_senha" boolean DEFAULT true NOT NULL,
+	"criado_em" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "usuario_pessoa_id_unique" UNIQUE("pessoa_id"),
+	CONSTRAINT "usuario_login_unique" UNIQUE("login")
+);
+--> statement-breakpoint
+ALTER TABLE "usuario" ADD CONSTRAINT "usuario_pessoa_id_pessoa_id_fk" FOREIGN KEY ("pessoa_id") REFERENCES "public"."pessoa"("id") ON DELETE cascade ON UPDATE no action;
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
 ARQUIVO: apps\api\drizzle\meta\_journal.json
 ================================================================================
 
@@ -207,6 +239,13 @@ ARQUIVO: apps\api\drizzle\meta\_journal.json
       "version": "7",
       "when": 1791998656459,
       "tag": "0000_brief_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793708465795,
+      "tag": "0001_loose_shinko_yamashiro",
       "breakpoints": true
     }
   ]
@@ -488,6 +527,384 @@ FIM DO ARQUIVO
 ================================================================================
 
 ================================================================================
+ARQUIVO: apps\api\drizzle\meta\0001_snapshot.json
+================================================================================
+
+{
+  "id": "fc3a7b94-ac7a-445a-ae3b-4cdcbda7967b",
+  "prevId": "f0ba1629-6236-47d6-acf4-429a02da6615",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.filiacao": {
+      "name": "filiacao",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "filiacao_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "filho_id": {
+          "name": "filho_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "genitor_id": {
+          "name": "genitor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "papel": {
+          "name": "papel",
+          "type": "papel_filiacao",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "filiacao_filho_id_pessoa_id_fk": {
+          "name": "filiacao_filho_id_pessoa_id_fk",
+          "tableFrom": "filiacao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "filho_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "filiacao_genitor_id_pessoa_id_fk": {
+          "name": "filiacao_genitor_id_pessoa_id_fk",
+          "tableFrom": "filiacao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "genitor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "filiacao_filho_papel": {
+          "name": "filiacao_filho_papel",
+          "nullsNotDistinct": false,
+          "columns": [
+            "filho_id",
+            "papel"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "filiacao_distintos": {
+          "name": "filiacao_distintos",
+          "value": "\"filiacao\".\"filho_id\" <> \"filiacao\".\"genitor_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.pessoa": {
+      "name": "pessoa",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "pessoa_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "nome": {
+          "name": "nome",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_nascimento": {
+          "name": "data_nascimento",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sexo": {
+          "name": "sexo",
+          "type": "varchar(1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "foto": {
+          "name": "foto",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.uniao": {
+      "name": "uniao",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "uniao_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "pessoa_a_id": {
+          "name": "pessoa_a_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pessoa_b_id": {
+          "name": "pessoa_b_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "uniao_pessoa_a_id_pessoa_id_fk": {
+          "name": "uniao_pessoa_a_id_pessoa_id_fk",
+          "tableFrom": "uniao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_a_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "uniao_pessoa_b_id_pessoa_id_fk": {
+          "name": "uniao_pessoa_b_id_pessoa_id_fk",
+          "tableFrom": "uniao",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_b_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uniao_par": {
+          "name": "uniao_par",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pessoa_a_id",
+            "pessoa_b_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "uniao_ordem": {
+          "name": "uniao_ordem",
+          "value": "\"uniao\".\"pessoa_a_id\" < \"uniao\".\"pessoa_b_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.usuario": {
+      "name": "usuario",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "usuario_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "pessoa_id": {
+          "name": "pessoa_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "login": {
+          "name": "login",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "senha_hash": {
+          "name": "senha_hash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "papel": {
+          "name": "papel",
+          "type": "papel_usuario",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MEMBRO'"
+        },
+        "trocar_senha": {
+          "name": "trocar_senha",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "usuario_pessoa_id_pessoa_id_fk": {
+          "name": "usuario_pessoa_id_pessoa_id_fk",
+          "tableFrom": "usuario",
+          "tableTo": "pessoa",
+          "columnsFrom": [
+            "pessoa_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "usuario_pessoa_id_unique": {
+          "name": "usuario_pessoa_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pessoa_id"
+          ]
+        },
+        "usuario_login_unique": {
+          "name": "usuario_login_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "login"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.papel_filiacao": {
+      "name": "papel_filiacao",
+      "schema": "public",
+      "values": [
+        "PAI",
+        "MAE"
+      ]
+    },
+    "public.papel_usuario": {
+      "name": "papel_usuario",
+      "schema": "public",
+      "values": [
+        "ADMIN",
+        "MEMBRO"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
 ARQUIVO: apps\api\drizzle.config.ts
 ================================================================================
 
@@ -524,7 +941,9 @@ ARQUIVO: apps\api\package.json
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
     "@fastify/cors": "^10.0.1",
+    "@fastify/jwt": "^10.2.6",
     "@fastify/multipart": "^9.0.1",
     "@fastify/static": "^8.0.3",
     "@raizes/domain": "workspace:*",
@@ -552,7 +971,9 @@ FIM DO ARQUIVO
 ARQUIVO: apps\api\src\app.ts
 ================================================================================
 
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { mkdirSync } from 'node:fs';
@@ -561,16 +982,29 @@ import Fastify from 'fastify';
 import { sql } from 'drizzle-orm';
 import { ZodError } from 'zod';
 import type { Db } from './db/client.js';
+import { exigirLogin, exigirPermissao } from './shared/autenticacao.js';
 import { ErroNegocio } from './shared/erros.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
 import { fotosRoutes } from './modules/fotos/fotos.routes.js';
 import { familiasRoutes } from './modules/familias/familias.routes.js';
 import { pessoasRoutes } from './modules/pessoas/pessoas.routes.js';
 
-export async function createApp(opts: { db: Db; webOrigin: string; uploadDir: string }) {
+export async function createApp(opts: {
+  db: Db;
+  webOrigin: string;
+  uploadDir: string;
+  jwtSecret: string;
+}) {
   const app = Fastify({ logger: true });
   await app.register(cors, {
     origin: opts.webOrigin,
+    credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
+  });
+  await app.register(cookie);
+  await app.register(jwt, {
+    secret: opts.jwtSecret,
+    cookie: { cookieName: 'token', signed: false },
   });
 
   const uploadDir = path.resolve(opts.uploadDir);
@@ -589,15 +1023,25 @@ export async function createApp(opts: { db: Db; webOrigin: string; uploadDir: st
     return reply.status(500).send({ erro: 'Erro interno' });
   });
 
+  // públicas
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/health/db', async () => {
     await opts.db.execute(sql`select 1`);
     return { ok: true, db: 'conectado' };
   });
+  await app.register(authRoutes(opts.db), { prefix: '/api' });
 
-  await app.register(pessoasRoutes(opts.db), { prefix: '/api' });
-  await app.register(familiasRoutes(opts.db), { prefix: '/api' });
-  await app.register(fotosRoutes(opts.db, uploadDir), { prefix: '/api' });
+  // protegidas: exigem login e checam permissão
+  await app.register(
+    async (privado) => {
+      privado.addHook('onRequest', exigirLogin);
+      privado.addHook('onRequest', exigirPermissao);
+      await privado.register(pessoasRoutes(opts.db));
+      await privado.register(familiasRoutes(opts.db));
+      await privado.register(fotosRoutes(opts.db, uploadDir));
+    },
+    { prefix: '/api' },
+  );
   return app;
 }
 
@@ -617,6 +1061,7 @@ const schema = z.object({
   PORT: z.coerce.number().int().default(3333),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_DIR: z.string().default('./uploads'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET precisa ter 32+ caracteres'),
 });
 
 export const env = schema.parse(process.env);
@@ -652,6 +1097,7 @@ ARQUIVO: apps\api\src\db\schema.ts
 
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   integer,
@@ -699,6 +1145,154 @@ export const filiacao = pgTable(
     check('filiacao_distintos', sql`${t.filhoId} <> ${t.genitorId}`),
   ],
 );
+
+export const papelUsuario = pgEnum('papel_usuario', ['ADMIN', 'MEMBRO']);
+
+export const usuario = pgTable('usuario', {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  pessoaId: integer('pessoa_id')
+    .notNull()
+    .unique()
+    .references(() => pessoa.id, { onDelete: 'cascade' }),
+  login: varchar({ length: 80 }).notNull().unique(),
+  senhaHash: varchar('senha_hash', { length: 255 }).notNull(),
+  papel: papelUsuario().notNull().default('MEMBRO'),
+  trocarSenha: boolean('trocar_senha').notNull().default(true),
+  criadoEm: timestamp('criado_em').notNull().defaultNow(),
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\auth\auth.repository.ts
+================================================================================
+
+import { eq } from 'drizzle-orm';
+import type { Db } from '../../db/client.js';
+import { pessoa, usuario } from '../../db/schema.js';
+
+export function authRepository(db: Db) {
+  return {
+    async buscarPorLogin(login: string) {
+      const [u] = await db.select().from(usuario).where(eq(usuario.login, login));
+      return u;
+    },
+    async buscarSenhaHash(id: number) {
+      const [u] = await db.select({ h: usuario.senhaHash }).from(usuario).where(eq(usuario.id, id));
+      return u?.h;
+    },
+    async buscarPerfil(id: number) {
+      const [u] = await db
+        .select({
+          id: usuario.id,
+          login: usuario.login,
+          papel: usuario.papel,
+          pessoaId: usuario.pessoaId,
+          trocarSenha: usuario.trocarSenha,
+          nome: pessoa.nome,
+        })
+        .from(usuario)
+        .innerJoin(pessoa, eq(pessoa.id, usuario.pessoaId))
+        .where(eq(usuario.id, id));
+      return u;
+    },
+    async definirSenha(id: number, senhaHash: string) {
+      await db.update(usuario).set({ senhaHash, trocarSenha: false }).where(eq(usuario.id, id));
+    },
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\auth\auth.routes.ts
+================================================================================
+
+import type { FastifyInstance } from 'fastify';
+import type { Db } from '../../db/client.js';
+import { exigirLogin } from '../../shared/autenticacao.js';
+import { ErroNegocio } from '../../shared/erros.js';
+import { conferirSenha, hashSenha } from '../../shared/senha.js';
+import { loginSchema, trocarSenhaSchema } from './auth.schema.js';
+import { authRepository } from './auth.repository.js';
+
+const SETE_DIAS = 60 * 60 * 24 * 7;
+
+export function authRoutes(db: Db) {
+  const repo = authRepository(db);
+  const cookie = {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: SETE_DIAS,
+  };
+
+  return async (app: FastifyInstance) => {
+    app.post('/auth/login', async (req, reply) => {
+      const { login, senha } = loginSchema.parse(req.body);
+      const u = await repo.buscarPorLogin(login);
+      if (!u || !(await conferirSenha(senha, u.senhaHash))) {
+        throw new ErroNegocio('Login ou senha inválidos', 401);
+      }
+      const token = app.jwt.sign(
+        { usuarioId: u.id, pessoaId: u.pessoaId, papel: u.papel },
+        { expiresIn: '7d' },
+      );
+      reply.setCookie('token', token, cookie);
+      return repo.buscarPerfil(u.id);
+    });
+
+    app.post('/auth/logout', async (_req, reply) => {
+      reply.clearCookie('token', { path: '/' });
+      return reply.status(204).send();
+    });
+
+    app.get('/auth/me', { onRequest: [exigirLogin] }, async (req) => {
+      const perfil = await repo.buscarPerfil(req.user.usuarioId);
+      if (!perfil) throw new ErroNegocio('Sessão inválida', 401);
+      return perfil;
+    });
+
+    app.post('/auth/trocar-senha', { onRequest: [exigirLogin] }, async (req, reply) => {
+      const { senhaAtual, novaSenha } = trocarSenhaSchema.parse(req.body);
+      const id = req.user.usuarioId;
+      const atual = await repo.buscarSenhaHash(id);
+      if (!atual || !(await conferirSenha(senhaAtual, atual))) {
+        throw new ErroNegocio('Senha atual incorreta', 422);
+      }
+      await repo.definirSenha(id, await hashSenha(novaSenha));
+      return reply.status(204).send();
+    });
+  };
+}
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\modules\auth\auth.schema.ts
+================================================================================
+
+import { z } from 'zod';
+
+export const loginSchema = z.object({
+  login: z.string().trim().toLowerCase().min(1, 'Informe o login'),
+  senha: z.string().min(1, 'Informe a senha'),
+});
+
+export const trocarSenhaSchema = z.object({
+  senhaAtual: z.string().min(1),
+  novaSenha: z.string().min(8, 'A nova senha precisa ter ao menos 8 caracteres').max(100),
+});
 
 
 ================================================================================
@@ -1113,8 +1707,51 @@ import { env } from './config/env.js';
 import { criarDb } from './db/client.js';
 
 const { db } = criarDb(env.DATABASE_URL);
-const app = await createApp({ db, webOrigin: env.WEB_ORIGIN, uploadDir: env.UPLOAD_DIR });
+const app = await createApp({
+  db,
+  webOrigin: env.WEB_ORIGIN,
+  uploadDir: env.UPLOAD_DIR,
+  jwtSecret: env.JWT_SECRET,
+});
 await app.listen({ port: env.PORT, host: '0.0.0.0' });
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\shared\autenticacao.ts
+================================================================================
+
+import type { FastifyReply, FastifyRequest } from 'fastify';
+
+type Payload = { usuarioId: number; pessoaId: number; papel: 'ADMIN' | 'MEMBRO' };
+
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: Payload;
+    user: Payload;
+  }
+}
+
+export async function exigirLogin(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    await req.jwtVerify();
+  } catch {
+    return reply.status(401).send({ erro: 'Não autenticado' });
+  }
+}
+
+/** ADMIN faz tudo; MEMBRO só lê, e edita o próprio cadastro/foto. */
+export async function exigirPermissao(req: FastifyRequest, reply: FastifyReply) {
+  const u = req.user;
+  if (u.papel === 'ADMIN' || req.method === 'GET' || req.method === 'HEAD') return;
+  const m = /^\/api\/pessoas\/(\d+)(\/foto)?$/.exec(req.url.split('?')[0]!);
+  const proprio = m !== null && Number(m[1]) === u.pessoaId;
+  if (proprio && (m![2] || req.method === 'PUT')) return;
+  return reply.status(403).send({ erro: 'Sem permissão para esta ação' });
+}
 
 
 ================================================================================
@@ -1128,13 +1765,64 @@ ARQUIVO: apps\api\src\shared\erros.ts
 export class ErroNegocio extends Error {
   constructor(
     mensagem: string,
-    public readonly status: 404 | 409 | 422 = 422,
+    public readonly status: 401 | 403 | 404 | 409 | 422 = 422,
   ) {
     super(mensagem);
   }
 }
 
 export const naoEncontrado = (o: string) => new ErroNegocio(`${o} não encontrado(a)`, 404);
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\shared\senha.test.ts
+================================================================================
+
+import { describe, expect, it } from 'vitest';
+import { conferirSenha, hashSenha } from './senha.js';
+
+describe('senha', () => {
+  it('confere a senha certa e rejeita a errada', async () => {
+    const h = await hashSenha('segredo123');
+    expect(await conferirSenha('segredo123', h)).toBe(true);
+    expect(await conferirSenha('outra', h)).toBe(false);
+  });
+  it('mesmo texto gera hashes diferentes (salt)', async () => {
+    expect(await hashSenha('abc')).not.toBe(await hashSenha('abc'));
+  });
+});
+
+
+================================================================================
+FIM DO ARQUIVO
+================================================================================
+
+================================================================================
+ARQUIVO: apps\api\src\shared\senha.ts
+================================================================================
+
+import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+
+const scrypt = promisify(scryptCb) as (s: string, salt: Buffer, len: number) => Promise<Buffer>;
+
+export async function hashSenha(senha: string): Promise<string> {
+  const salt = randomBytes(16);
+  const hash = await scrypt(senha, salt, 64);
+  return `${salt.toString('hex')}:${hash.toString('hex')}`;
+}
+
+export async function conferirSenha(senha: string, guardado: string): Promise<boolean> {
+  const [saltHex, hashHex] = guardado.split(':');
+  if (!saltHex || !hashHex) return false;
+  const esperado = Buffer.from(hashHex, 'hex');
+  const hash = await scrypt(senha, Buffer.from(saltHex, 'hex'), esperado.length);
+  return timingSafeEqual(hash, esperado);
+}
 
 
 ================================================================================
@@ -1321,7 +2009,7 @@ button {
   padding: 8px 14px; border: 0; border-radius: 4px; cursor: pointer;
   background: var(--destaque); color: #fff; font: inherit;
 }
-button:disabled { opacity: 0.6; cursor: wait; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
 button.secundario { background: var(--marrom-claro); }
 button.perigo { background: #8a2b2b; }
 .tabela { width: 100%; border-collapse: collapse; background: #fffaf0; }
@@ -1370,6 +2058,50 @@ button.secundario, label.botao.secundario { color: #fff; }
 }
 .arvore-nome.destaque { font-weight: bold; color: #7a4d10; border-color: #b8892f; }
 .arvore-sem-ligacao { margin-top: 12px; font-size: 0.9rem; }
+
+
+/* controles da apresentação progressiva da árvore */
+.arvore-controles {
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid #dfcfb1;
+  border-radius: 10px;
+  background: rgba(255, 250, 240, 0.82);
+}
+
+.arvore-velocidade {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--marrom);
+  font-size: 0.9rem;
+}
+
+.arvore-velocidade select {
+  padding: 6px 9px;
+  border: 1px solid #dfd1bd;
+  border-radius: 16px;
+  background: #fffefa;
+  color: var(--marrom);
+  font: inherit;
+}
+
+.arvore-progresso {
+  min-width: 132px;
+  color: var(--marrom-claro);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .arvore-controles {
+    width: 100%;
+  }
+
+  .arvore-progresso {
+    text-align: left;
+  }
+}
 
 
 ================================================================================
@@ -1458,6 +2190,9 @@ export function Arvore() {
   const [busca, setBusca] = useState('');
   const [focoEscolhido, setFocoEscolhido] = useState<number | null | undefined>(undefined);
   const [zoom, setZoom] = useState(1);
+  const [geracoesVisiveis, setGeracoesVisiveis] = useState(0);
+  const [estadoAnimacao, setEstadoAnimacao] = useState<'parada' | 'executando' | 'pausada' | 'concluida'>('parada');
+  const [intervaloAnimacao, setIntervaloAnimacao] = useState(1100);
   const areaRef = useRef<HTMLDivElement>(null);
   const ajusteInicialFeito = useRef(false);
 
@@ -1471,6 +2206,27 @@ export function Arvore() {
     const semLigacao = pessoas.data.filter((p) => !layout.x.has(p.id));
     return { layout, porId, curtos, semLigacao };
   }, [pessoas.data, unioes.data, filiacoes.data]);
+
+  const totalGeracoes = dados?.layout.totalLinhas ?? 0;
+
+  useEffect(() => {
+    setGeracoesVisiveis(0);
+    setEstadoAnimacao('parada');
+  }, [totalGeracoes]);
+
+  useEffect(() => {
+    if (estadoAnimacao !== 'executando') return;
+    const temporizador = window.setInterval(() => {
+      setGeracoesVisiveis((visiveis) => Math.min(visiveis + 1, totalGeracoes));
+    }, intervaloAnimacao);
+    return () => window.clearInterval(temporizador);
+  }, [estadoAnimacao, intervaloAnimacao, totalGeracoes]);
+
+  useEffect(() => {
+    if (estadoAnimacao === 'executando' && totalGeracoes > 0 && geracoesVisiveis >= totalGeracoes) {
+      setEstadoAnimacao('concluida');
+    }
+  }, [estadoAnimacao, geracoesVisiveis, totalGeracoes]);
 
   // pessoa em foco: por padrão, a primeira da última geração
   const focoPadrao = useMemo(() => {
@@ -1547,8 +2303,48 @@ export function Arvore() {
   const combina = (id: number) =>
     filtro === '' || semAcento(porId.get(id)?.nome ?? '').includes(filtro);
 
+  const iniciarAnimacao = () => {
+    if (geracoesVisiveis >= totalGeracoes) setGeracoesVisiveis(0);
+    setGeracoesVisiveis((visiveis) => (visiveis === 0 ? 1 : visiveis));
+    setEstadoAnimacao(totalGeracoes <= 1 ? 'concluida' : 'executando');
+  };
+
+  const reiniciarAnimacao = () => {
+    setGeracoesVisiveis(0);
+    setEstadoAnimacao('parada');
+  };
+
   const barra = (
     <div className="arvore-barra">
+      <div className="arvore-barra-grupo arvore-controles">
+        {estadoAnimacao === 'parada' || estadoAnimacao === 'concluida' ? (
+          <button type="button" onClick={iniciarAnimacao}>
+            {estadoAnimacao === 'concluida' ? '▶ Reproduzir novamente' : '▶ Iniciar árvore'}
+          </button>
+        ) : estadoAnimacao === 'executando' ? (
+          <button type="button" onClick={() => setEstadoAnimacao('pausada')}>Ⅱ Pausar</button>
+        ) : (
+          <button type="button" onClick={() => setEstadoAnimacao('executando')}>▶ Continuar</button>
+        )}
+        <button type="button" className="secundario" onClick={reiniciarAnimacao}
+          disabled={geracoesVisiveis === 0}>
+          ↺ Reiniciar
+        </button>
+        <label className="arvore-velocidade">
+          Velocidade
+          <select value={intervaloAnimacao}
+            onChange={(e) => setIntervaloAnimacao(Number(e.target.value))}>
+            <option value={1800}>Lenta</option>
+            <option value={1100}>Normal</option>
+            <option value={650}>Rápida</option>
+          </select>
+        </label>
+        <span className="arvore-progresso" aria-live="polite">
+          {geracoesVisiveis} de {totalGeracoes} gerações
+          {estadoAnimacao === 'pausada' ? ' · pausada' : ''}
+          {estadoAnimacao === 'concluida' ? ' · concluída' : ''}
+        </span>
+      </div>
       <div className="arvore-barra-grupo">
         <button type="button" className="secundario" onClick={() => setZoom((z) => limitar(z / 1.15))}>
           −
@@ -1615,7 +2411,7 @@ export function Arvore() {
           height={altura * zoom}
           viewBox={`0 0 ${largura} ${altura}`}
           role="img"
-          aria-label="Árvore genealógica"
+          aria-label={`Árvore genealógica: ${geracoesVisiveis} de ${totalGeracoes} gerações exibidas`}
         >
           <defs>
             <radialGradient id="fundo-radial" cx="50%" cy="40%" r="75%">
@@ -1658,7 +2454,7 @@ export function Arvore() {
             let origemY: number;
             const partes: ReactNode[] = [];
 
-            if (c.direitaId !== null) {
+            if (c.direitaId !== null && c.linha < geracoesVisiveis) {
               const xe = layout.x.get(c.esquerdaId)! + MARGEM_ROTULOS;
               const xd = layout.x.get(c.direitaId)! + MARGEM_ROTULOS;
               partes.push(
@@ -1678,6 +2474,7 @@ export function Arvore() {
             }
 
             c.filhosIds.forEach((filho) => {
+              if ((layout.linha.get(filho) ?? Infinity) >= geracoesVisiveis) return;
               const fx = layout.x.get(filho)! + MARGEM_ROTULOS;
               const fy = topoDaLinha(layout.linha.get(filho)!) - 1;
               const m = (fy - origemY) * 0.55;
@@ -1697,7 +2494,7 @@ export function Arvore() {
 
           {/* corações */}
           {layout.casais
-            .filter((c) => c.direitaId !== null)
+            .filter((c) => c.direitaId !== null && c.linha < geracoesVisiveis)
             .map((c, i) => {
               const cx = c.centroX + MARGEM_ROTULOS;
               const cy = topoDaLinha(c.linha) + RAIO_ANEL;
@@ -1723,7 +2520,9 @@ export function Arvore() {
             const p = porId.get(id);
             if (!p) return null;
             const cx = x + MARGEM_ROTULOS;
-            const topo = topoDaLinha(layout.linha.get(id)!);
+            const linhaPessoa = layout.linha.get(id)!;
+            if (linhaPessoa >= geracoesVisiveis) return null;
+            const topo = topoDaLinha(linhaPessoa);
             const cy = topo + RAIO_ANEL;
             const destaque = linhaDireta.has(id);
             const nome = curtos.get(id) ?? p.nome;
@@ -1772,6 +2571,7 @@ export function Arvore() {
 
           {/* rótulos das gerações */}
           {Array.from({ length: layout.totalLinhas }, (_, i) => {
+            if (i >= geracoesVisiveis) return null;
             const titulo =
               layout.totalLinhas === 5 ? TITULOS_5[i]! : `${ROMANOS[i + 1] ?? i + 1} Geração`;
             const linhas = titulo.split('\n');
