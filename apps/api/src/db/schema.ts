@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   integer,
@@ -47,3 +48,18 @@ export const filiacao = pgTable(
     check('filiacao_distintos', sql`${t.filhoId} <> ${t.genitorId}`),
   ],
 );
+
+export const papelUsuario = pgEnum('papel_usuario', ['ADMIN', 'MEMBRO']);
+
+export const usuario = pgTable('usuario', {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  pessoaId: integer('pessoa_id')
+    .notNull()
+    .unique()
+    .references(() => pessoa.id, { onDelete: 'cascade' }),
+  login: varchar({ length: 80 }).notNull().unique(),
+  senhaHash: varchar('senha_hash', { length: 255 }).notNull(),
+  papel: papelUsuario().notNull().default('MEMBRO'),
+  trocarSenha: boolean('trocar_senha').notNull().default(true),
+  criadoEm: timestamp('criado_em').notNull().defaultNow(),
+});

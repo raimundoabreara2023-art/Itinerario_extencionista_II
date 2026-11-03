@@ -5,6 +5,7 @@ const schema = z.object({
   PORT: z.coerce.number().int().default(3333),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_DIR: z.string().default('./uploads'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET precisa ter 32+ caracteres'),
 });
 
 export const env = schema.parse(process.env);
